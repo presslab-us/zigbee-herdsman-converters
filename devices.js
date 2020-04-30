@@ -484,6 +484,20 @@ const xiaomi = {
     },
 };
 
+const pl = {
+    overswitch: {
+        supports: 'on/off, move, illuminance, temperature',
+        fromZigbee: [
+            fz.command_on, fz.command_off, fz.cmd_move, fz.cmd_stop, fz.illuminance, fz.temperature, fz.battery,
+        ],
+        toZigbee: [],
+        meta: {configureKey: 1, disableDefaultResponse: true, multiEndpoint: true},
+        endpoint: (device) => {
+            return {'1': 1, '2': 2, '3': 3};
+        },
+    },
+};
+
 const devices = [
     // Xiaomi
     {
@@ -2389,6 +2403,108 @@ const devices = [
         supports: 'on/off',
         fromZigbee: [fz.cmdToggle],
         toZigbee: [],
+    },
+
+    {
+        zigbeeModel: ['PL-GDO1'],
+        model: 'PL-GDO1',
+        vendor: 'Custom devices (DiY)',
+        description: 'Presslab garage door controller',
+        supports: 'lock/unlock',
+        fromZigbee: [fz.lock],
+        toZigbee: [tz.generic_lock],
+        meta: {configureKey: 1, multiEndpoint: true},
+        endpoint: (device) => {
+            return {l1: 1, l2: 2};
+        },
+        configure: async (device, coordinatorEndpoint) => {
+            await bind(device.getEndpoint(1), coordinatorEndpoint, ['closuresDoorLock']);
+            await bind(device.getEndpoint(2), coordinatorEndpoint, ['closuresDoorLock']);
+        },
+    },
+    {
+        zigbeeModel: ['PL-HL'],
+        model: 'PL-HL',
+        vendor: 'Custom devices (DiY)',
+        description: 'Presslab homelink bridge',
+        supports: 'action, temperature',
+        fromZigbee: [fz.cmdToggle, fz.temperature],
+        toZigbee: [],
+        meta: {configureKey: 1, multiEndpoint: true},
+        endpoint: (device) => {
+            return {l1: 1, l2: 2, l3: 3};
+        },
+        configure: async (device, coordinatorEndpoint) => {
+            await bind(device.getEndpoint(1), coordinatorEndpoint, ['genOnOff', 'msTemperatureMeasurement']);
+            await bind(device.getEndpoint(2), coordinatorEndpoint, ['genOnOff']);
+            await bind(device.getEndpoint(3), coordinatorEndpoint, ['genOnOff']);
+        },
+    },
+    {
+        zigbeeModel: ['PL-LDSK'],
+        model: 'PL-LDSK',
+        vendor: 'Custom devices (DiY)',
+        description: 'Presslab desk lamp',
+        extend: hue.light_onoff_brightness,
+    },
+    {
+        zigbeeModel: ['PL-OS1'],
+        model: 'PL-OS1',
+        vendor: 'Custom devices (DiY)',
+        description: 'Presslab overswitch single',
+        configure: async (device, coordinatorEndpoint) => {
+            const binds = [
+                'genOnOff', 'genLevelCtrl', 'genPowerCfg', 'msIlluminanceMeasurement', 'msTemperatureMeasurement',
+            ];
+            await bind(device.getEndpoint(1), coordinatorEndpoint, binds);
+        },
+        extend: pl.overswitch,
+    },
+    {
+        zigbeeModel: ['PL-OS2'],
+        model: 'PL-OS2',
+        vendor: 'Custom devices (DiY)',
+        description: 'Presslab overswitch double',
+        configure: async (device, coordinatorEndpoint) => {
+            const binds = [
+                'genOnOff', 'genLevelCtrl', 'genPowerCfg', 'msIlluminanceMeasurement', 'msTemperatureMeasurement',
+            ];
+            await bind(device.getEndpoint(1), coordinatorEndpoint, binds);
+            await bind(device.getEndpoint(2), coordinatorEndpoint, ['genOnOff', 'genLevelCtrl']);
+        },
+        extend: pl.overswitch,
+    },
+    {
+        zigbeeModel: ['PL-OS3'],
+        model: 'PL-OS3',
+        vendor: 'Custom devices (DiY)',
+        description: 'Presslab overswitch triple',
+        configure: async (device, coordinatorEndpoint) => {
+            const binds = [
+                'genOnOff', 'genLevelCtrl', 'genPowerCfg', 'msIlluminanceMeasurement', 'msTemperatureMeasurement',
+            ];
+            await bind(device.getEndpoint(1), coordinatorEndpoint, binds);
+            await bind(device.getEndpoint(2), coordinatorEndpoint, ['genOnOff', 'genLevelCtrl']);
+            await bind(device.getEndpoint(3), coordinatorEndpoint, ['genOnOff', 'genLevelCtrl']);
+        },
+        extend: pl.overswitch,
+    },
+    {
+        zigbeeModel: ['PL-THMIDEA'],
+        model: 'PL-THMIDEA',
+        vendor: 'Custom devices (DiY)',
+        description: 'Presslab Midea thermostat interface',
+        supports: 'temperature, heating/cooling system control, fan',
+        fromZigbee: [fz.thermostat_att_report, fz.generic_fan_mode],
+        toZigbee: [
+            tz.thermostat_occupied_heating_setpoint, tz.thermostat_occupied_cooling_setpoint, tz.thermostat_setpoint_raise_lower,
+            tz.thermostat_control_sequence_of_operation, tz.thermostat_system_mode, tz.fan_mode,
+        ],
+        meta: {configureKey: 1},
+        configure: async (device, coordinatorEndpoint) => {
+            const endpoint = device.getEndpoint(1);
+            await bind(endpoint, coordinatorEndpoint, ['hvacThermostat', 'hvacFanCtrl']);
+        },
     },
 
     // databyte.ch

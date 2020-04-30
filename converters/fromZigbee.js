@@ -342,7 +342,8 @@ const converters = {
         type: ['attributeReport', 'readResponse'],
         convert: (model, msg, publish, options, meta) => {
             if (msg.data.hasOwnProperty('lockState')) {
-                return {state: msg.data.lockState == 2 ? 'UNLOCK' : 'LOCK'};
+                const property = getProperty('state', msg, model);
+                return {[property]: msg.data.lockState == 2 ? 'UNLOCK' : 'LOCK'};
             }
         },
     },
@@ -2329,7 +2330,8 @@ const converters = {
         convert: (model, msg, publish, options, meta) => {
             ictcg1(model, msg, publish, options, 'move');
             const direction = msg.data.movemode === 1 ? 'left' : 'right';
-            return {action: `rotate_${direction}`, rate: msg.data.rate};
+            const property = getProperty(`rotate_${direction}`, msg, model);
+            return {action: property, rate: msg.data.rate};
         },
     },
     cmd_move_with_onoff: {
@@ -2346,7 +2348,8 @@ const converters = {
         type: 'commandStop',
         convert: (model, msg, publish, options, meta) => {
             const value = ictcg1(model, msg, publish, options, 'stop');
-            return {action: `rotate_stop`, brightness: value};
+            const property = getProperty(`rotate_stop`, msg, model);
+            return {action: property, brightness: value};
         },
     },
     cmd_stop_with_onoff: {
@@ -2496,6 +2499,9 @@ const converters = {
             const result = {};
             if (typeof msg.data['localTemp'] == 'number') {
                 result.local_temperature = precisionRound(msg.data['localTemp'], 2) / 100;
+            }
+            if (typeof msg.data['outdoorTemp'] == 'number') {
+                result.outdoor_temperature = precisionRound(msg.data['outdoorTemp'], 2) / 100;
             }
             if (typeof msg.data['localTemperatureCalibration'] == 'number') {
                 result.local_temperature_calibration =
@@ -2842,7 +2848,7 @@ const converters = {
         cluster: 'genOnOff',
         type: 'commandToggle',
         convert: (model, msg, publish, options, meta) => {
-            return {action: 'toggle'};
+            return {action: getProperty('toggle', msg, model)};
         },
     },
     E1524_hold: {
