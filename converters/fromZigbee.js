@@ -4680,7 +4680,6 @@ const converters = {
         type: 'commandAlertsNotification',
         convert: (model, msg, publish, options, meta) => {
             const alertStatus = msg.data.aalert;
-            console.log(`Alert! ${msg.data}`);
             return {
                 water_leak: (alertStatus & 1<<12) > 0,
             };
