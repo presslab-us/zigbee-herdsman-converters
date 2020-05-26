@@ -272,21 +272,20 @@ const converters = {
         },
     },
     light_brightness_move: {
-        key: ['brightness_move'],
+        key: ['brightness_move', 'brightness_move_onoff'],
         convertSet: async (entity, key, value, meta) => {
             if (value === 'stop') {
                 await entity.command('genLevelCtrl', 'stop', {}, getOptions(meta.mapped));
 
                 // As we cannot determine the new brightness state, we read it from the device
-                await wait(1000);
-                if (entity.constructor.name === 'Endpoint') {
-                    await entity.read('genLevelCtrl', ['currentLevel']);
-                } else if (entity.constructor.name === 'Group' && entity.members.length > 0) {
-                    await entity.members[0].read('genLevelCtrl', ['currentLevel']);
-                }
+                await wait(500);
+                const target = entity.constructor.name === 'Group' ? entity.members[0] : entity;
+                await target.read('genOnOff', ['onOff']);
+                await target.read('genLevelCtrl', ['currentLevel']);
             } else {
                 const payload = {movemode: value > 0 ? 0 : 1, rate: Math.abs(value)};
-                await entity.command('genLevelCtrl', 'move', payload, getOptions(meta.mapped));
+                const command = key.endsWith('onoff') ? 'moveWithOnOff' : 'move';
+                await entity.command('genLevelCtrl', command, payload, getOptions(meta.mapped));
             }
         },
     },
@@ -337,6 +336,7 @@ const converters = {
                 message.brightness : message.brightness_percent;
             const hasState = message.hasOwnProperty('state');
             const state = hasState ? message.state.toLowerCase() : null;
+            const entityID = entity.constructor.name === 'Group' ? entity.groupID : entity.deviceIeeeAddress;
 
             if (state === 'toggle' || state === 'off' || (!hasBrightness && state === 'on')) {
                 const transition = getTransition(entity, 'brightness', meta);
@@ -347,33 +347,23 @@ const converters = {
                         // it once we turn it on again.
                         // We cannot rely on the meta.state as when reporting is enabled the bulb will reports
                         // it brightness while decreasing the brightness.
-                        store[entity.deviceIeeeAddress] =
-                            {brightness: meta.state.brightness, turnedOffWithTransition: true};
+                        store[entityID] = {brightness: meta.state.brightness, turnedOffWithTransition: true};
                     }
 
-                    const level = state === 'off' ? 0 :
-                        (store[entity.deviceIeeeAddress] ? store[entity.deviceIeeeAddress].brightness : 255);
-                    if (state === 'on') delete store[entity.deviceIeeeAddress];
-
+                    const level = state === 'off' ? 0 : (store[entityID] ? store[entityID].brightness : 254);
                     const payload = {level, transtime: transition.time};
                     await entity.command('genLevelCtrl', 'moveToLevelWithOnOff', payload, getOptions(meta.mapped));
-
-                    const newState = {state: state.toUpperCase()};
-                    if (state === 'on') {
-                        newState['brightness'] = level;
-                    }
-
-                    return {state: newState};
+                    return {state: {state: state.toUpperCase(), brightness: state === 'on' ? level : 0}};
                 } else {
-                    if (hasState && state === 'on' && store.hasOwnProperty(entity.deviceIeeeAddress) &&
-                        store[entity.deviceIeeeAddress].turnedOffWithTransition) {
+                    if (hasState && state === 'on' && store.hasOwnProperty(entityID) &&
+                        store[entityID].turnedOffWithTransition) {
                         /**
                          * In case the bulb it turned OFF with a transition and turned ON WITHOUT
                          * a transition, the brightness is not recovered as it turns on with brightness 1.
                          * https://github.com/Koenkk/zigbee-herdsman-converters/issues/1073
                          */
-                        const brightness = store[entity.deviceIeeeAddress].brightness;
-                        delete store[entity.deviceIeeeAddress];
+                        const brightness = store[entityID].brightness;
+                        store[entityID].turnedOffWithTransition = false;
                         await entity.command(
                             'genLevelCtrl',
                             'moveToLevelWithOnOff',
@@ -388,19 +378,29 @@ const converters = {
                         // Store brightness where the bulb was turned off with as we need it when the bulb is turned on
                         // with transition.
                         if (meta.state.hasOwnProperty('brightness') && state === 'off') {
-                            store[entity.deviceIeeeAddress] =
-                                {brightness: meta.state.brightness, turnedOffWithTransition: false};
+                            store[entityID] = {brightness: meta.state.brightness, turnedOffWithTransition: false};
                         }
 
                         const result = await converters.on_off.convertSet(entity, 'state', state, meta);
-                        if (state === 'on') {
-                            result.readAfterWriteTime = 0;
+                        if (result.state) {
+                            if (state === 'on') {
+                                result.readAfterWriteTime = 0;
+                                if (store.hasOwnProperty(entityID)) {
+                                    result.state.brightness = store[entityID].brightness;
+                                }
+                            } else {
+                                // off = brightness 0
+                                result.state.brightness = 0;
+                            }
                         }
+
                         return result;
                     }
                 }
             } else if (!hasState && hasBrightness && Number(brightnessValue) === 0) {
-                return await converters.on_off.convertSet(entity, 'state', 'off', meta);
+                const result = await converters.on_off.convertSet(entity, 'state', 'off', meta);
+                result.state.brightness = 0;
+                return result;
             } else {
                 const transition = getTransition(entity, 'brightness', meta).time;
                 let brightness = 0;
@@ -410,7 +410,8 @@ const converters = {
                 } else if (message.hasOwnProperty('brightness_percent')) {
                     brightness = Math.round(Number(message.brightness_percent) * 2.55).toString();
                 }
-
+                brightness = Math.min(254, brightness);
+                store[entityID] = {...store[entityID], brightness};
                 await entity.command(
                     'genLevelCtrl',
                     'moveToLevelWithOnOff',
@@ -1014,6 +1015,14 @@ const converters = {
 
             await entity.write('genBasic', {0xFFF0: {value: payload[0], type: 0x41}}, options.xiaomi);
             await entity.write('genBasic', {0xFFF0: {value: payload[1], type: 0x41}}, options.xiaomi);
+            return {state: {power_outage_memory: value}};
+        },
+    },
+    ZNCZ04LM_power_outage_memory: {
+        key: ['power_outage_memory'],
+        convertSet: async (entity, key, value, meta) => {
+            await entity.write('aqaraOpple', {0x0201: {value: value ? 1 : 0, type: 0x10}}, options.xiaomi);
+            return {state: {power_outage_memory: value}};
         },
     },
     xiaomi_switch_operation_mode: {
@@ -1308,7 +1317,7 @@ const converters = {
                 getOptions(meta.mapped),
             );
 
-            return {readAfterWriteTime: 200, state: {state: value.toUpperCase()}};
+            return {readAfterWriteTime: 200};
         },
         convertGet: async (entity, key, meta) => {
             await entity.read('closuresDoorLock', ['lockState']);
@@ -1319,15 +1328,6 @@ const converters = {
         convertSet: async (entity, key, value, meta) => {
             if (meta.message && meta.message.hasOwnProperty('transition')) {
                 meta.message.transition = meta.message.transition * 3.3;
-            }
-
-            if (meta.mapped.model === 'GL-C-007' && utils.hasEndpoints(meta.device, [11, 13, 15])) {
-                // GL-C-007 RGBW
-                if (key === 'state' && value.toUpperCase() === 'OFF' && !meta.options.separate_control) {
-                    await converters.light_onoff_brightness.convertSet(meta.device.getEndpoint(15), key, value, meta);
-                }
-
-                entity = meta.state.white_value === -1 ? meta.device.getEndpoint(11) : meta.device.getEndpoint(15);
             }
 
             if (meta.mapped.model === 'GL-C-007/GL-C-008' && utils.hasEndpoints(meta.device, [10, 11, 13])) {
@@ -1362,54 +1362,15 @@ const converters = {
                 meta.message.transition = meta.message.transition * 3.3;
             }
 
-            if (key === 'color' && !meta.message.transition) {
+            if (meta.mapped.model === 'GL-C-007-1ID' && key === 'color' && !meta.message.transition) {
                 // Always provide a transition when setting color, otherwise CCT to RGB
                 // doesn't work properly (CCT leds stay on).
                 meta.message.transition = 0.4;
             }
 
-            const state = {};
-
-            if (meta.mapped.model === 'GL-C-007') {
-                // GL-C-007 RGBW
-                if (utils.hasEndpoints(meta.device, [11, 13, 15])) {
-                    if (key === 'white_value') {
-                        // Switch from RGB to white
-                        if (!meta.options.separate_control) {
-                            await meta.device.getEndpoint(15).command('genOnOff', 'on', {});
-                            await meta.device.getEndpoint(11).command('genOnOff', 'off', {});
-                            state.color = xyWhite;
-                        }
-
-                        const result = await converters.light_brightness.convertSet(
-                            meta.device.getEndpoint(15), key, value, meta,
-                        );
-                        return {
-                            state: {white_value: value, ...result.state, ...state},
-                            readAfterWriteTime: 0,
-                        };
-                    } else {
-                        if (meta.state.white_value !== -1 && !meta.options.separate_control) {
-                            // Switch from white to RGB
-                            await meta.device.getEndpoint(11).command('genOnOff', 'on', {});
-                            await meta.device.getEndpoint(15).command('genOnOff', 'off', {});
-                            state.white_value = -1;
-                        }
-                    }
-                } else if (utils.hasEndpoints(meta.device, [11, 13])) {
-                    if (key === 'white_value') {
-                        // Switch to white channel
-                        const payload = {colortemp: 500, transtime: getTransition(entity, key, meta).time};
-                        await entity.command('lightingColorCtrl', 'moveToColorTemp', payload, getOptions(meta.mapped));
-
-                        const result = await converters.light_brightness.convertSet(entity, key, value, meta);
-                        return {
-                            state: {white_value: value, ...result.state, color: xyWhite},
-                            readAfterWriteTime: 0,
-                        };
-                    }
-                }
-            }
+            // Gledopto devices turn ON when they are OFF and color is set.
+            // https://github.com/Koenkk/zigbee2mqtt/issues/3509
+            const state = {state: 'ON'};
 
             // GL-C-007/GL-C-008 RGBW
             if (meta.mapped.model === 'GL-C-007/GL-C-008' && utils.hasEndpoints(meta.device, [10, 11, 13])) {
@@ -1451,14 +1412,28 @@ const converters = {
                 value = 'on';
             }
 
+            let supports = {colorTemperature: false, colorXY: false};
+            if (entity.constructor.name === 'Endpoint' && entity.supportsInputCluster('lightingColorCtrl')) {
+                const readResult = await entity.read('lightingColorCtrl', ['colorCapabilities']);
+                supports = {
+                    colorTemperature: (readResult.colorCapabilities & 1<<4) > 0,
+                    colorXY: (readResult.colorCapabilities & 1<<3) > 0,
+                };
+            } else if (entity.constructor.name === 'Group') {
+                supports = {colorTemperature: true, colorXY: true};
+            }
+
             if (value === 'off') {
                 await entity.write('genOnOff', {0x4003: {value: 0x00, type: 0x30}});
             } else if (value === 'recover') {
                 await entity.write('genOnOff', {0x4003: {value: 0xff, type: 0x30}});
                 await entity.write('genLevelCtrl', {0x4000: {value: 0xff, type: 0x20}});
 
-                if (entity.supportsInputCluster('lightingColorCtrl')) {
+                if (supports.colorTemperature) {
                     await entity.write('lightingColorCtrl', {0x4010: {value: 0xffff, type: 0x21}});
+                }
+
+                if (supports.colorXY) {
                     await entity.write('lightingColorCtrl', {0x0003: {value: 0xffff, type: 0x21}}, options.hue);
                     await entity.write('lightingColorCtrl', {0x0004: {value: 0xffff, type: 0x21}}, options.hue);
                 }
@@ -1483,22 +1458,31 @@ const converters = {
                         const colortemp = meta.message.hue_power_on_color_temperature;
                         await entity.write('lightingColorCtrl', {0x4010: {value: colortemp, type: 0x21}});
                         // Set color to default
-                        await entity.write('lightingColorCtrl', {0x0003: {value: 0xFFFF, type: 0x21}}, options.hue);
-                        await entity.write('lightingColorCtrl', {0x0004: {value: 0xFFFF, type: 0x21}}, options.hue);
+                        if (supports.colorXY) {
+                            await entity.write('lightingColorCtrl', {0x0003: {value: 0xFFFF, type: 0x21}}, options.hue);
+                            await entity.write('lightingColorCtrl', {0x0004: {value: 0xFFFF, type: 0x21}}, options.hue);
+                        }
                     } else if (meta.message.hasOwnProperty('hue_power_on_color')) {
                         const xy = utils.hexToXY(meta.message.hue_power_on_color);
                         value = {x: xy.x * 65535, y: xy.y * 65535};
 
                         // Set colortemp to default
-                        await entity.write('lightingColorCtrl', {0x4010: {value: 366, type: 0x21}});
+                        if (supports.colorTemperature) {
+                            await entity.write('lightingColorCtrl', {0x4010: {value: 366, type: 0x21}});
+                        }
 
                         await entity.write('lightingColorCtrl', {0x0003: {value: value.x, type: 0x21}}, options.hue);
                         await entity.write('lightingColorCtrl', {0x0004: {value: value.y, type: 0x21}}, options.hue);
                     } else {
                         // Set defaults for colortemp and color
-                        await entity.write('lightingColorCtrl', {0x4010: {value: 366, type: 0x21}});
-                        await entity.write('lightingColorCtrl', {0x0003: {value: 0xFFFF, type: 0x21}}, options.hue);
-                        await entity.write('lightingColorCtrl', {0x0004: {value: 0xFFFF, type: 0x21}}, options.hue);
+                        if (supports.colorTemperature) {
+                            await entity.write('lightingColorCtrl', {0x4010: {value: 366, type: 0x21}});
+                        }
+
+                        if (supports.colorXY) {
+                            await entity.write('lightingColorCtrl', {0x0003: {value: 0xFFFF, type: 0x21}}, options.hue);
+                            await entity.write('lightingColorCtrl', {0x0004: {value: 0xFFFF, type: 0x21}}, options.hue);
+                        }
                     }
                 }
             }
@@ -2236,6 +2220,34 @@ const converters = {
                 }
             }
         },
+    },
+    diyruz_freepad_on_off_config: {
+        key: ['switch_type', 'switch_actions'],
+        convertSet: async (entity, key, value, meta) => {
+            const switchTypesLookup = {
+                toggle: 0x00,
+                momentary: 0x01,
+                multifunction: 0x02,
+            };
+            const switchActionsLookup = {
+                on: 0x00,
+                off: 0x01,
+                toggle: 0x02,
+            };
+
+            const payloads = {
+                switch_type: {'switchType': switchTypesLookup[value] || value},
+                switch_actions: {'switchActions': switchActionsLookup[value] || value},
+            };
+
+            await entity.write('genOnOffSwitchCfg', payloads[key]);
+        },
+    },
+    // Not a converter, can be used by tests to clear the store.
+    __clearStore__: () => {
+        for (const key of Object.keys(store)) {
+            delete store[key];
+        }
     },
 };
 
