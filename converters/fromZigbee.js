@@ -4866,6 +4866,15 @@ const converters = {
             };
         },
     },
+    PL_GERMFILTER_on_off: {
+        cluster: 'genOnOff',
+        type: ['attributeReport', 'readResponse'],
+        convert: (model, msg, publish, options, meta) => {
+            if (msg.data.hasOwnProperty('onOff') && msg.endpoint.ID == 2) {
+                return {['state']: msg.data['onOff'] === 1 ? 'ON' : 'OFF'};
+            }
+        },
+    },
 
     // Ignore converters (these message dont need parsing).
     ignore_onoff_report: {

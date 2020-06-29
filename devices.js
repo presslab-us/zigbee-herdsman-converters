@@ -2649,6 +2649,22 @@ const devices = [
             await bind(endpoint, coordinatorEndpoint, ['hvacThermostat', 'hvacFanCtrl']);
         },
     },
+    {
+        zigbeeModel: ['PL-GERMFILTER'],
+        model: 'PL-GERMFILTER',
+        vendor: 'Custom devices (DiY)',
+        description: 'Presslab Germguardian filter',
+        supports: 'fan, on/off',
+        fromZigbee: [fz.generic_fan_mode, fz.PL_GERMFILTER_on_off],
+        toZigbee: [
+            tz.fan_mode, tz.PL_GERMFILTER_on_off,
+        ],
+        meta: {configureKey: 1},
+        configure: async (device, coordinatorEndpoint) => {
+            await bind(device.getEndpoint(1), coordinatorEndpoint, ['hvacFanCtrl']);
+            await bind(device.getEndpoint(2), coordinatorEndpoint, ['genOnOff']);
+        },
+    },
 
     // databyte.ch
     {

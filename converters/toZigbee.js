@@ -2060,6 +2060,17 @@ const converters = {
             return {state: {interface_mode: value}};
         },
     },
+    PL_GERMFILTER_on_off: {
+        key: ['state'],
+        convertSet: async (entity, key, value, meta) => {
+            const endpoint = meta.device.getEndpoint(2);
+            return await converters.on_off.convertSet(endpoint, key, value, meta);
+        },
+        convertGet: async (entity, key, meta) => {
+            const endpoint = meta.device.getEndpoint(2);
+            return await converters.on_off.convertGet(endpoint, key, meta);
+        },
+    },
 
     /**
      * Ignore converters
