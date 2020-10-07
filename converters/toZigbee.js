@@ -2,6 +2,7 @@
 
 const utils = require('./utils');
 const common = require('./common');
+const globalStore = require('./store');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const store = {};
@@ -48,6 +49,14 @@ async function sendTuyaCommand(entity, dp, fn, data) {
         },
         {disableDefaultResponse: true},
     );
+}
+
+function saveSceneState(entity, sceneID, groupID, state) {
+    const attributes = ['state', 'color_temp', 'brightness', 'color'];
+    if (!entity.meta.hasOwnProperty('scenes')) entity.meta.scenes = {};
+    const metaKey = `${sceneID}_${groupID}`;
+    entity.meta.scenes[metaKey] = {state: utils.filterObject(state, attributes)};
+    entity.save();
 }
 
 function getEntityOrFirstGroupMember(entity) {
@@ -308,15 +317,19 @@ const converters = {
             const onOff = key.endsWith('_onoff');
             const command = onOff ? 'stepWithOnOff' : 'step';
             value = Number(value);
+            if (isNaN(value)) {
+                throw new Error(`${key} value of message: '${JSON.stringify(meta.message)}' invalid`);
+            }
+
             const mode = value > 0 ? 0 : 1;
             const transition = getTransition(entity, key, meta).time;
             const payload = {stepmode: mode, stepsize: Math.abs(value), transtime: transition};
             await entity.command('genLevelCtrl', command, payload, getOptions(meta.mapped, entity));
 
             if (meta.state.hasOwnProperty('brightness')) {
-                let brightness = meta.state.brightness + value;
+                let brightness = onOff || meta.state.state === 'ON' ? meta.state.brightness + value : meta.state.brightness;
                 brightness = Math.min(254, brightness);
-                brightness = Math.max(onOff ? 0 : 1, brightness);
+                brightness = Math.max(onOff || meta.state.state === 'OFF' ? 0 : 1, brightness);
 
                 if (utils.getMetaValue(entity, meta.mapped, 'turnsOffAtBrightness1')) {
                     if (onOff && value < 0 && brightness === 1) {
@@ -333,7 +346,7 @@ const converters = {
     light_brightness_move: {
         key: ['brightness_move', 'brightness_move_onoff'],
         convertSet: async (entity, key, value, meta) => {
-            if (value === 'stop') {
+            if (value === 'stop' || value === 0) {
                 await entity.command('genLevelCtrl', 'stop', {}, getOptions(meta.mapped, entity));
 
                 // As we cannot determine the new brightness state, we read it from the device
@@ -343,31 +356,36 @@ const converters = {
                 await target.read('genLevelCtrl', ['currentLevel']);
             } else {
                 value = Number(value);
+                if (isNaN(value)) {
+                    throw new Error(`${key} value of message: '${JSON.stringify(meta.message)}' invalid`);
+                }
                 const payload = {movemode: value > 0 ? 0 : 1, rate: Math.abs(value)};
                 const command = key.endsWith('onoff') ? 'moveWithOnOff' : 'move';
                 await entity.command('genLevelCtrl', command, payload, getOptions(meta.mapped, entity));
             }
         },
     },
-    light_brightness: {
-        key: ['brightness', 'brightness_percent'],
+    light_colortemp_step: {
+        key: ['color_temp_step'],
         convertSet: async (entity, key, value, meta) => {
-            if (key === 'brightness_percent') {
-                value = Math.round(Number(value) * 2.55).toString();
+            value = Number(value);
+            if (isNaN(value)) {
+                throw new Error(`${key} value of message: '${JSON.stringify(meta.message)}' invalid`);
             }
 
-            if (Number(value) === 0) {
-                const result = await converters.on_off.convertSet(entity, 'state', 'off', meta);
-                result.state.brightness = 0;
-                return result;
-            } else {
-                const payload = {level: Number(value), transtime: getTransition(entity, key, meta).time};
-                await entity.command('genLevelCtrl', 'moveToLevel', payload, getOptions(meta.mapped, entity));
-                return {state: {brightness: Number(value)}, readAfterWriteTime: payload.transtime * 100};
+            const mode = value > 0 ? 1 : 3;
+            const transition = getTransition(entity, key, meta).time;
+            const payload = {stepmode: mode, stepsize: Math.abs(value), transtime: transition, minimum: 0, maximum: 600};
+            await entity.command('lightingColorCtrl', 'stepColorTemp', payload, getOptions(meta.mapped, entity));
+
+            // We cannot determine the color temperature from the current state so we read it, because
+            // - We don't know the max/min valus
+            // - Color mode could have been swithed (x/y or hue/saturation)
+            const entityToRead = getEntityOrFirstGroupMember(entity);
+            if (entityToRead) {
+                await wait(100 + (transition * 100));
+                await entityToRead.read('lightingColorCtrl', ['colorTemperature']);
             }
-        },
-        convertGet: async (entity, key, meta) => {
-            await entity.read('genLevelCtrl', ['currentLevel']);
         },
     },
     light_colortemp_move: {
@@ -388,9 +406,11 @@ const converters = {
 
                 // As we cannot determine the new brightness state, we read it from the device
                 if (value === 'stop' || value === 0) {
-                    await wait(500);
-                    const target = entity.constructor.name === 'Group' ? entity.members[0] : entity;
-                    await target.read('lightingColorCtrl', ['colorTemperature']);
+                    const entityToRead = getEntityOrFirstGroupMember(entity);
+                    if (entityToRead) {
+                        await wait(100);
+                        await entityToRead.read('lightingColorCtrl', ['colorTemperature']);
+                    }
                 }
             } else {
                 // Deprecated
@@ -409,19 +429,83 @@ const converters = {
             }
         },
     },
+    light_hue_saturation_step: {
+        key: ['hue_step', 'saturation_step'],
+        convertSet: async (entity, key, value, meta) => {
+            value = Number(value);
+            if (isNaN(value)) {
+                throw new Error(`${key} value of message: '${JSON.stringify(meta.message)}' invalid`);
+            }
+
+            const command = key === 'hue_step' ? 'stepHue' : 'stepSaturation';
+            const attribute = key === 'hue_step' ? 'currentHue' : 'currentSaturation';
+            const mode = value > 0 ? 1 : 3;
+            const transition = getTransition(entity, key, meta).time;
+            const payload = {stepmode: mode, stepsize: Math.abs(value), transtime: transition};
+            await entity.command('lightingColorCtrl', command, payload, getOptions(meta.mapped, entity));
+
+            // We cannot determine the hue/saturation from the current state so we read it, because
+            // - Color mode could have been swithed (x/y or colortemp)
+            const entityToRead = getEntityOrFirstGroupMember(entity);
+            if (entityToRead) {
+                await wait(100 + (transition * 100));
+                await entityToRead.read('lightingColorCtrl', [attribute]);
+            }
+        },
+    },
+    light_hue_saturation_move: {
+        key: ['hue_move', 'saturation_move'],
+        convertSet: async (entity, key, value, meta) => {
+            value = value === 'stop' ? value : Number(value);
+            if (isNaN(value) && value !== 'stop') {
+                throw new Error(`${key} value of message: '${JSON.stringify(meta.message)}' invalid`);
+            }
+
+            const command = key === 'hue_move' ? 'moveHue' : 'moveSaturation';
+            const attribute = key === 'hue_move' ? 'currentHue' : 'currentSaturation';
+
+            const payload = {};
+            if (value === 'stop' || value === 0) {
+                payload.rate = 1;
+                payload.movemode = 0;
+            } else {
+                payload.rate = Math.abs(value);
+                payload.movemode = value > 0 ? 1 : 3;
+            }
+
+            await entity.command('lightingColorCtrl', command, payload, getOptions(meta.mapped, entity));
+
+            // As we cannot determine the new brightness state, we read it from the device
+            if (value === 'stop' || value === 0) {
+                const entityToRead = getEntityOrFirstGroupMember(entity);
+                if (entityToRead) {
+                    await wait(100);
+                    await entityToRead.read('lightingColorCtrl', [attribute]);
+                }
+            }
+        },
+    },
     light_onoff_brightness: {
         key: ['state', 'brightness', 'brightness_percent'],
         convertSet: async (entity, key, value, meta) => {
             const {message} = meta;
-            const hasBrightness = message.hasOwnProperty('brightness') || message.hasOwnProperty('brightness_percent');
-            const brightnessValue = message.hasOwnProperty('brightness') ?
-                message.brightness : message.brightness_percent;
-            const hasState = message.hasOwnProperty('state');
-            const state = hasState ? message.state.toLowerCase() : null;
-            const entityID = entity.constructor.name === 'Group' ? entity.groupID : entity.deviceIeeeAddress;
+            const transition = getTransition(entity, 'brightness', meta);
+            const turnsOffAtBrightness1 = utils.getMetaValue(entity, meta.mapped, 'turnsOffAtBrightness1');
+            const state = message.hasOwnProperty('state') ? message.state.toLowerCase() : undefined;
+            let brightness = undefined;
+            if (message.hasOwnProperty('brightness')) brightness = Number(message.brightness);
+            else if (message.hasOwnProperty('brightness_percent')) brightness = Math.round(Number(message.brightness_percent) * 2.55);
 
-            if (state === 'toggle' || state === 'off' || (!hasBrightness && state === 'on')) {
-                const transition = getTransition(entity, 'brightness', meta);
+            if (brightness !== undefined && (isNaN(brightness) || brightness < 0 || brightness > 255)) {
+                // Allow 255 value, changing this to 254 would be a breaking change.
+                throw new Error(`Brightness value of message: '${JSON.stringify(message)}' invalid, must be a number >= 0 and =< 254`);
+            }
+
+            if (state !== undefined && ['on', 'off', 'toggle'].includes(state) === false) {
+                throw new Error(`State value of message: '${JSON.stringify(message)}' invalid, must be 'ON', 'OFF' or 'TOGGLE'`);
+            }
+
+            if (state === 'toggle' || state === 'off' || (brightness === undefined && state === 'on')) {
                 if (transition.specified && (state === 'off' || state === 'on')) {
                     if (state === 'off' && meta.state.brightness) {
                         // https://github.com/Koenkk/zigbee2mqtt/issues/2850#issuecomment-580365633
@@ -429,98 +513,66 @@ const converters = {
                         // it once we turn it on again.
                         // We cannot rely on the meta.state as when reporting is enabled the bulb will reports
                         // it brightness while decreasing the brightness.
-                        store[entityID] = {brightness: meta.state.brightness, turnedOffWithTransition: true};
+                        globalStore.putValue(entity, 'brightness', meta.state.brightness);
+                        globalStore.putValue(entity, 'turnedOffWithTransition', true);
                     }
 
-                    const level = state === 'off' ? 0 : (store[entityID] ? store[entityID].brightness : 254);
+                    let level = state === 'off' ? 0 : globalStore.getValue(entity, 'brightness', 254);
+                    if (state === 'on' && level === 0) level = turnsOffAtBrightness1 ? 2 : 1;
+
                     const payload = {level, transtime: transition.time};
-                    await entity.command(
-                        'genLevelCtrl', 'moveToLevelWithOnOff', payload, getOptions(meta.mapped, entity),
-                    );
-                    return {state: {state: state.toUpperCase(), brightness: state === 'on' ? level : 0}};
+                    await entity.command('genLevelCtrl', 'moveToLevelWithOnOff', payload, getOptions(meta.mapped, entity));
+                    const result = {state: {state: state.toUpperCase()}};
+                    if (state === 'on') result.state.brightness = level;
+                    return result;
                 } else {
-                    if (hasState && state === 'on' && store.hasOwnProperty(entityID) &&
-                        store[entityID].turnedOffWithTransition) {
+                    if (state === 'on' && globalStore.getValue(entity, 'turnedOffWithTransition') === true) {
                         /**
                          * In case the bulb it turned OFF with a transition and turned ON WITHOUT
                          * a transition, the brightness is not recovered as it turns on with brightness 1.
                          * https://github.com/Koenkk/zigbee-herdsman-converters/issues/1073
                          */
-                        const brightness = store[entityID].brightness;
-                        store[entityID].turnedOffWithTransition = false;
+                        globalStore.putValue(entity, 'turnedOffWithTransition', false);
                         await entity.command(
                             'genLevelCtrl',
                             'moveToLevelWithOnOff',
-                            {level: Number(brightness), transtime: 0},
+                            {level: globalStore.getValue(entity, 'brightness'), transtime: 0},
                             getOptions(meta.mapped, entity),
                         );
-                        return {
-                            state: {state: brightness === 0 ? 'OFF' : 'ON', brightness: Number(brightness)},
-                            readAfterWriteTime: transition * 100,
-                        };
+                        return {state: {state: 'ON'}, readAfterWriteTime: transition * 100};
                     } else {
                         // Store brightness where the bulb was turned off with as we need it when the bulb is turned on
                         // with transition.
-                        if (meta.state.hasOwnProperty('brightness') && state === 'off' && meta.state.brightness !== 0) {
-                            store[entityID] = {brightness: meta.state.brightness, turnedOffWithTransition: false};
+                        if (meta.state.hasOwnProperty('brightness') && state === 'off') {
+                            globalStore.putValue(entity, 'brightness', meta.state.brightness);
+                            globalStore.putValue(entity, 'turnedOffWithTransition', false);
                         }
 
                         const result = await converters.on_off.convertSet(entity, 'state', state, meta);
-                        if (result.state) {
-                            if (result.state.state === 'ON') {
-                                result.readAfterWriteTime = 0;
-                                if (store.hasOwnProperty(entityID)) {
-                                    result.state.brightness = store[entityID].brightness;
-                                } else if (meta.state.brightness === 0) {
-                                    /**
-                                     * In case bulb is turned off and the store is reset (because of application
-                                     * restart) we don't know the previous brightness when on. Therefore retrieve
-                                     * it from the bulb.
-                                     * https://github.com/Koenkk/zigbee2mqtt/issues/3736
-                                     */
-                                    const entityToRead = getEntityOrFirstGroupMember(entity);
-                                    if (entityToRead) {
-                                        const readData = await entityToRead.read('genLevelCtrl', ['currentLevel']);
-                                        result.state.brightness = readData.currentLevel;
-                                    }
-                                }
-                            } else {
-                                // off = brightness 0
-                                result.state.brightness = 0;
-                            }
+                        result.readAfterWriteTime = 0;
+                        if (result.state && result.state.state === 'ON' && meta.state.brightness === 0) {
+                            result.state.brightness = 1;
                         }
 
                         return result;
                     }
                 }
-            } else if (!hasState && hasBrightness && Number(brightnessValue) === 0) {
-                const result = await converters.on_off.convertSet(entity, 'state', 'off', meta);
-                result.state.brightness = 0;
-                return result;
             } else {
-                const transition = getTransition(entity, 'brightness', meta).time;
-                let brightness = 0;
-
-                if (message.hasOwnProperty('brightness')) {
-                    brightness = message.brightness;
-                } else if (message.hasOwnProperty('brightness_percent')) {
-                    brightness = Math.round(Number(message.brightness_percent) * 2.55).toString();
-                }
                 brightness = Math.min(254, brightness);
-                if (brightness === 1 && utils.getMetaValue(entity, meta.mapped, 'turnsOffAtBrightness1') === true) {
-                    brightness = 0;
+                if (brightness === 1 && turnsOffAtBrightness1) {
+                    brightness = 2;
                 }
 
-                store[entityID] = {...store[entityID], brightness};
+                globalStore.putValue(entity, 'brightness', brightness);
                 await entity.command(
                     'genLevelCtrl',
                     'moveToLevelWithOnOff',
-                    {level: Number(brightness), transtime: transition},
+                    {level: Number(brightness), transtime: transition.time},
                     getOptions(meta.mapped, entity),
                 );
                 return {
                     state: {state: brightness === 0 ? 'OFF' : 'ON', brightness: Number(brightness)},
-                    readAfterWriteTime: transition * 100,
+                    readAfterWriteTime: transition.time * 100,
                 };
             }
         },
@@ -1082,6 +1134,26 @@ const converters = {
             await entity.read('hvacFanCtrl', ['fanMode']);
         },
     },
+    arm_mode: {
+        key: ['arm_mode'],
+        convertSet: async (entity, key, value, meta) => {
+            const mode = utils.getKeyByValue(common.armMode, value.mode, undefined);
+            if (mode === undefined) {
+                throw new Error(
+                    `Unsupported mode: '${value.mode}', should be one of: ${Object.values(common.armMode)}`,
+                );
+            }
+
+            if (value.hasOwnProperty('transaction')) {
+                entity.commandResponse('ssIasAce', 'armRsp', {armnotification: mode}, {}, value.transaction);
+            }
+
+            const panelStatus = mode !== 0 && mode !== 4 ? 0x80: 0x00;
+            globalStore.putValue(entity, 'panelStatus', panelStatus);
+            const payload = {panelstatus: panelStatus, secondsremain: 0, audiblenotif: 0, alarmstatus: 0};
+            entity.commandResponse('ssIasAce', 'panelStatusChanged', payload);
+        },
+    },
 
     /**
      * Device specific
@@ -1154,6 +1226,13 @@ const converters = {
             }
 
             return {state: {power_outage_memory: value}};
+        },
+    },
+    xiaomi_power: {
+        key: ['power'],
+        convertGet: async (entity, key, meta) => {
+            const endpoint = meta.device.endpoints.find((e) => e.supportsInputCluster('genAnalogInput'));
+            await endpoint.read('genAnalogInput', ['presentValue']);
         },
     },
     xiaomi_switch_operation_mode: {
@@ -1803,6 +1882,78 @@ const converters = {
             }
         },
     },
+    sinope_floor_control_mode: {
+        // TH1300ZB specific
+        key: ['floor_control_mode'],
+        convertSet: async (entity, key, value, meta) => {
+            if (typeof value !== 'string') {
+                return;
+            }
+            const lookup = {'ambiant': 1, 'floor': 2};
+            value = value.toLowerCase();
+            if (lookup.hasOwnProperty(value)) {
+                await entity.write('manuSpecificSinope', {floorControlMode: lookup[value]});
+            }
+        },
+    },
+    sinope_ambiant_max_heat_setpoint: {
+        // TH1300ZB specific
+        key: ['ambiant_max_heat_setpoint'],
+        convertSet: async (entity, key, value, meta) => {
+            if (value >= 5 && value <= 36) {
+                await entity.write('manuSpecificSinope', {ambiantMaxHeatSetpointLimit: value * 100});
+            }
+        },
+    },
+    sinope_floor_min_heat_setpoint: {
+        // TH1300ZB specific
+        key: ['floor_min_heat_setpoint'],
+        convertSet: async (entity, key, value, meta) => {
+            if (value >= 5 && value <= 36) {
+                await entity.write('manuSpecificSinope', {floorMinHeatSetpointLimit: value * 100});
+            }
+        },
+    },
+    sinope_floor_max_heat_setpoint: {
+        // TH1300ZB specific
+        key: ['floor_max_heat_setpoint'],
+        convertSet: async (entity, key, value, meta) => {
+            if (value >= 5 && value <= 36) {
+                await entity.write('manuSpecificSinope', {floorMaxHeatSetpointLimit: value * 100});
+            }
+        },
+    },
+    sinope_temperature_sensor: {
+        // TH1300ZB specific
+        key: ['floor_temperature_sensor'],
+        convertSet: async (entity, key, value, meta) => {
+            if (typeof value !== 'string') {
+                return;
+            }
+            const lookup = {'10k': 0, '12k': 1};
+            value = value.toLowerCase();
+            if (lookup.hasOwnProperty(value)) {
+                await entity.write('manuSpecificSinope', {temperatureSensor: lookup[value]});
+            }
+        },
+        convertGet: async (entity, key, meta) => {
+            await entity.read('manuSpecificSinope', ['temperatureSensor']);
+        },
+    },
+    sinope_time_format: {
+        // TH1300ZB specific
+        key: ['time_format'],
+        convertSet: async (entity, key, value, meta) => {
+            if (typeof value !== 'string') {
+                return;
+            }
+            const lookup = {'24h': 0, '12h': 1};
+            value = value.toLowerCase();
+            if (lookup.hasOwnProperty(value)) {
+                await entity.write('manuSpecificSinope', {timeFormatToDisplay: lookup[value]});
+            }
+        },
+    },
     stelpro_thermostat_outdoor_temperature: {
         key: ['thermostat_outdoor_temperature'],
         convertSet: async (entity, key, value, meta) => {
@@ -2271,7 +2422,7 @@ const converters = {
             const lookup = {l1: 1, l2: 2, l3: 3, l4: 4};
             const multiEndpoint = meta.mapped.meta && meta.mapped.meta.multiEndpoint;
             const keyid = multiEndpoint ? lookup[meta.endpoint_name] : 1;
-            sendTuyaCommand(entity, 256 + keyid, 0, [1, value === 'ON' ? 1 : 0]);
+            await sendTuyaCommand(entity, 256 + keyid, 0, [1, value === 'ON' ? 1 : 0]);
             return {state: {state: value.toUpperCase()}};
         },
     },
@@ -2388,24 +2539,163 @@ const converters = {
         },
     },
 
-    // Tuya Thermostat
+    // Moes Thermostat
+    moes_thermostat_child_lock: {
+        key: ['child_lock'],
+        convertSet: async (entity, key, value, meta) => {
+            sendTuyaCommand(entity, 296, 0, [1, value==='LOCK' ? 1 : 0]);
+        },
+    },
+    moes_thermostat_current_heating_setpoint: {
+        key: ['current_heating_setpoint'],
+        convertSet: async (entity, key, value, meta) => {
+            const temp = value;
+            const payloadValue = utils.convertDecimalValueTo2ByteHexArray(temp);
+            sendTuyaCommand(entity, 528, 0, [4, 0, 0, ...payloadValue]);
+        },
+    },
+    moes_thermostat_min_temperature: {
+        key: ['min_temperature'],
+        convertSet: async (entity, key, value, meta) => {
+            const temp = value;
+            const payloadValue = utils.convertDecimalValueTo2ByteHexArray(temp);
+            sendTuyaCommand(entity, 532, 0, [4, 0, 0, ...payloadValue]);
+        },
+    },
+    moes_thermostat_calibration: {
+        key: ['local_temperature_calibration'],
+        convertSet: async (entity, key, value, meta) => {
+            if (value < 0) value = 4096 + value;
+            const payloadValue = utils.convertDecimalValueTo2ByteHexArray(value);
+            sendTuyaCommand(entity, 539, 0, [4, 0, 0, ...payloadValue]);
+        },
+    },
+    moes_thermostat_mode: {
+        key: ['preset'],
+        convertSet: async (entity, key, value, meta) => {
+            sendTuyaCommand(entity, 1026, 0, [1, value === 'hold' ? 0 : 1]);
+            sendTuyaCommand(entity, 1027, 0, [1, value === 'program' ? 0 : 1]);
+        },
+    },
+    moes_thermostat_standby: {
+        key: ['system_mode'],
+        convertSet: async (entity, key, value, meta) => {
+            sendTuyaCommand(entity, 257, 0, [1, value === 'heat' ? 1 : 0]);
+            sendTuyaCommand(entity, 257, 0, [1, value === 'off' ? 0 : 1]);
+        },
+    },
+    // send an mqtt message to topic '/sensor' to change the temperature sensor setting - options [0=IN|1=AL|2=OU]
+    moes_thermostat_sensor: {
+        key: ['sensor'],
+        convertSet: async (entity, key, value, meta) => {
+            sendTuyaCommand(entity, 1067, 0, [1, value]);
+        },
+    },
+    etop_thermostat_system_mode: {
+        key: ['system_mode'],
+        convertSet: async (entity, key, value, meta) => {
+            switch (value) {
+            case 'off':
+                await sendTuyaCommand(entity, 257, 0, [1, 0/* off */]);
+                break;
+            case 'heat':
+                await sendTuyaCommand(entity, 257, 0, [1, 1/* on */]);
+                await utils.sleepMs(500);
+                await sendTuyaCommand(entity, 1028, 0, [1, 0/* manual */]);
+                break;
+            case 'auto':
+                await sendTuyaCommand(entity, 257, 0, [1, 1/* on */]);
+                await utils.sleepMs(500);
+                await sendTuyaCommand(entity, 1028, 0, [1, 2/* auto */]);
+                break;
+            }
+        },
+    },
+    etop_thermostat_away_mode: {
+        key: ['away_mode'],
+        convertSet: async (entity, key, value, meta) => {
+            switch (value) {
+            case 'ON':
+                await sendTuyaCommand(entity, 257, 0, [1, 1/* on */]);
+                await utils.sleepMs(500);
+                await sendTuyaCommand(entity, 1028, 0, [1, 1/* away */]);
+                break;
+            case 'OFF':
+                await sendTuyaCommand(entity, 1028, 0, [1, 0/* manual */]);
+                break;
+            }
+        },
+    },
+    tuya_thermostat_weekly_schedule: {
+        key: ['weekly_schedule'],
+        convertSet: async (entity, key, value, meta) => {
+            const thermostatMeta = utils.getMetaValue(entity, meta.mapped, 'thermostat');
+            const maxTransitions = thermostatMeta.weeklyScheduleMaxTransitions;
+            const supportedModes = thermostatMeta.weeklyScheduleSupportedModes;
+            const firstDayDpId = thermostatMeta.weeklyScheduleFirstDayDpId;
+
+            function transitionToData(transition) {
+                // Later it is possible to move converter to meta or to other place outside if other type of converter
+                // will be needed for other device. Currently this converter is based on ETOP HT-08 thermostat.
+                // see also fromZigbee.tuya_thermostat_weekly_schedule()
+                const minutesSinceMidnight = transition.transitionTime;
+                const heatSetpoint = Math.floor(transition.heatSetpoint * 10);
+                return [
+                    (minutesSinceMidnight & 0xff00) >> 8,
+                    minutesSinceMidnight & 0xff,
+                    (heatSetpoint & 0xff00) >> 8,
+                    heatSetpoint & 0xff,
+                ];
+            }
+            for (const [, daySchedule] of Object.entries(value)) {
+                const dayofweek = parseInt(daySchedule.dayofweek);
+                const numoftrans = parseInt(daySchedule.numoftrans);
+                let transitions = [...daySchedule.transitions];
+                const mode = parseInt(daySchedule.mode);
+                if (!supportedModes.includes(mode)) {
+                    throw new Error(`Invalid mode: ${mode} for device ${meta.options.friendlyName}`);
+                }
+                if (numoftrans != transitions.length) {
+                    throw new Error(`Invalid numoftrans provided. Real: ${transitions.length} ` +
+                        `provided ${numoftrans} for device ${meta.options.friendlyName}`);
+                }
+                if (transitions.length > maxTransitions) {
+                    throw new Error(`Too more transitions provided. Provided: ${transitions.length} ` +
+                        `but supports only ${numoftrans} for device ${meta.options.friendlyName}`);
+                }
+                if (transitions.length < maxTransitions) {
+                    meta.logger.warn(`Padding transitions from ${transitions.length} ` +
+                        `to ${maxTransitions} with last item for device ${meta.options.friendlyName}`);
+                    const lastTransition = transitions[transitions.length-1];
+                    while (transitions.length != maxTransitions) {
+                        transitions = [...transitions, lastTransition];
+                    }
+                }
+                const payload = [];
+                transitions.forEach((transition) => {
+                    payload.push(...transitionToData(transition));
+                });
+                await sendTuyaCommand(entity, firstDayDpId - 1 + dayofweek, 0, [payload.length, ...payload]);
+            }
+        },
+    },
     tuya_thermostat_child_lock: {
         key: ['child_lock'],
         convertSet: async (entity, key, value, meta) => {
-            sendTuyaCommand(entity, 263, 0, [1, value==='LOCK' ? 1 : 0]);
+            await sendTuyaCommand(entity, 263, 0, [1, value==='LOCK' ? 1 : 0]);
         },
     },
     tuya_thermostat_window_detection: {
         key: ['window_detection'],
         convertSet: async (entity, key, value, meta) => {
-            sendTuyaCommand(entity, 104, 0, [1, value==='ON' ? 1 : 0]);
-            sendTuyaCommand(entity, 274, 0, [1, value==='ON' ? 1 : 0]);
+            await sendTuyaCommand(entity, 104, 0, [1, value==='ON' ? 1 : 0]);
+            await sendTuyaCommand(entity, 274, 0, [1, value==='ON' ? 1 : 0]);
         },
     },
     tuya_thermostat_valve_detection: {
         key: ['valve_detection'],
         convertSet: async (entity, key, value, meta) => {
-            sendTuyaCommand(entity, 276, 0, [1, value==='ON' ? 1 : 0]);
+            await sendTuyaCommand(entity, 276, 0, [1, value==='ON' ? 1 : 0]);
         },
     },
     tuya_thermostat_current_heating_setpoint: {
@@ -2413,7 +2703,7 @@ const converters = {
         convertSet: async (entity, key, value, meta) => {
             const temp = Math.round(value * 10);
             const payloadValue = utils.convertDecimalValueTo2ByteHexArray(temp);
-            sendTuyaCommand(entity, 514, 0, [4, 0, 0, ...payloadValue]);
+            await sendTuyaCommand(entity, 514, 0, [4, 0, 0, ...payloadValue]);
         },
     },
     tuya_thermostat_system_mode: {
@@ -2421,7 +2711,7 @@ const converters = {
         convertSet: async (entity, key, value, meta) => {
             const modeId = utils.getKeyByValue(utils.getMetaValue(entity, meta.mapped, 'tuyaThermostatSystemMode'), value, null);
             if (modeId !== null) {
-                sendTuyaCommand(entity, 1028, 0, [1, parseInt(modeId)]);
+                await sendTuyaCommand(entity, 1028, 0, [1, parseInt(modeId)]);
             } else {
                 console.log(`TRV system mode ${value} is not recognized.`);
             }
@@ -2432,7 +2722,25 @@ const converters = {
         convertSet: async (entity, key, value, meta) => {
             const presetId = utils.getKeyByValue(utils.getMetaValue(entity, meta.mapped, 'tuyaThermostatPreset'), value, null);
             if (presetId !== null) {
-                sendTuyaCommand(entity, 1028, 0, [1, parseInt(presetId)]);
+                await sendTuyaCommand(entity, 1028, 0, [1, parseInt(presetId)]);
+            } else {
+                console.log(`TRV preset ${value} is not recognized.`);
+            }
+        },
+    },
+    tuya_thermostat_away_mode: {
+        key: ['away_mode'],
+        convertSet: async (entity, key, value, meta) => {
+            // HA has special behavior for the away mode
+            const awayPresetId = utils.getKeyByValue(utils.getMetaValue(entity, meta.mapped, 'tuyaThermostatPreset'), 'away', null);
+            const schedulePresetId = utils.getKeyByValue(utils.getMetaValue(entity, meta.mapped, 'tuyaThermostatPreset'), 'schedule', null);
+            if (awayPresetId !== null) {
+                if (value == 'ON') {
+                    await sendTuyaCommand(entity, 1028, 0, [1, parseInt(awayPresetId)]);
+                } else if (schedulePresetId != null) {
+                    await sendTuyaCommand(entity, 1028, 0, [1, parseInt(schedulePresetId)]);
+                }
+                // In case 'OFF' tuya_thermostat_preset() should be called with another preset
             } else {
                 console.log(`TRV preset ${value} is not recognized.`);
             }
@@ -2443,7 +2751,7 @@ const converters = {
         convertSet: async (entity, key, value, meta) => {
             const modeId = utils.getKeyByValue(common.TuyaFanModes, value, null);
             if (modeId !== null) {
-                sendTuyaCommand(entity, 1029, 0, [1, parseInt(modeId)]);
+                await sendTuyaCommand(entity, 1029, 0, [1, parseInt(modeId)]);
             } else {
                 console.log(`TRV fan mode ${value} is not recognized.`);
             }
@@ -2452,7 +2760,7 @@ const converters = {
     tuya_thermostat_auto_lock: {
         key: ['auto_lock'],
         convertSet: async (entity, key, value, meta) => {
-            sendTuyaCommand(entity, 372, 0, [1, value==='AUTO' ? 1 : 0]);
+            await sendTuyaCommand(entity, 372, 0, [1, value==='AUTO' ? 1 : 0]);
         },
     },
     tuya_thermostat_calibration: {
@@ -2460,42 +2768,42 @@ const converters = {
         convertSet: async (entity, key, value, meta) => {
             const temp = Math.round(value * 10);
             const payloadValue = utils.convertDecimalValueTo2ByteHexArray(temp);
-            sendTuyaCommand(entity, 556, 0, [4, 0, 0, ...payloadValue]);
+            await sendTuyaCommand(entity, 556, 0, [4, 0, 0, ...payloadValue]);
         },
     },
     tuya_thermostat_min_temp: {
         key: ['min_temperature'],
         convertSet: async (entity, key, value, meta) => {
             const payloadValue = utils.convertDecimalValueTo2ByteHexArray(value);
-            sendTuyaCommand(entity, 614, 0, [4, 0, 0, ...payloadValue]);
+            await sendTuyaCommand(entity, 614, 0, [4, 0, 0, ...payloadValue]);
         },
     },
     tuya_thermostat_max_temp: {
         key: ['max_temperature'],
         convertSet: async (entity, key, value, meta) => {
             const payloadValue = utils.convertDecimalValueTo2ByteHexArray(value);
-            sendTuyaCommand(entity, 615, 0, [4, 0, 0, ...payloadValue]);
+            await sendTuyaCommand(entity, 615, 0, [4, 0, 0, ...payloadValue]);
         },
     },
     tuya_thermostat_boost_time: {
         key: ['boost_time'],
         convertSet: async (entity, key, value, meta) => {
             const payloadValue = utils.convertDecimalValueTo2ByteHexArray(value);
-            sendTuyaCommand(entity, 617, 0, [4, 0, 0, ...payloadValue]);
+            await sendTuyaCommand(entity, 617, 0, [4, 0, 0, ...payloadValue]);
         },
     },
     tuya_thermostat_comfort_temp: {
         key: ['comfort_temperature'],
         convertSet: async (entity, key, value, meta) => {
             const payloadValue = utils.convertDecimalValueTo2ByteHexArray(value);
-            sendTuyaCommand(entity, 619, 0, [4, 0, 0, ...payloadValue]);
+            await sendTuyaCommand(entity, 619, 0, [4, 0, 0, ...payloadValue]);
         },
     },
     tuya_thermostat_eco_temp: {
         key: ['eco_temperature'],
         convertSet: async (entity, key, value, meta) => {
             const payloadValue = utils.convertDecimalValueTo2ByteHexArray(value);
-            sendTuyaCommand(entity, 620, 0, [4, 0, 0, ...payloadValue]);
+            await sendTuyaCommand(entity, 620, 0, [4, 0, 0, ...payloadValue]);
         },
     },
     tuya_thermostat_force: {
@@ -2503,7 +2811,7 @@ const converters = {
         convertSet: async (entity, key, value, meta) => {
             const modeId = utils.getKeyByValue(common.TuyaThermostatForceMode, value, null);
             if (modeId !== null) {
-                sendTuyaCommand(entity, 1130, 0, [1, parseInt(modeId)]);
+                await sendTuyaCommand(entity, 1130, 0, [1, parseInt(modeId)]);
             } else {
                 console.log(`TRV force mode ${value} is not recognized.`);
             }
@@ -2519,8 +2827,8 @@ const converters = {
                 if (value >= 0 && value <= 100) {
                     const invert = !(meta.mapped.meta && meta.mapped.meta.coverInverted ?
                         !meta.options.invert_cover : meta.options.invert_cover);
-                    value = invert ? 100 - value : value;
-                    sendTuyaCommand(entity, 514, 0, [4, 0, 0, 0, value]); // 0x02 0x02: Set position from 0 - 100%
+                    value = invert ? value : 100 - value;
+                    await sendTuyaCommand(entity, 514, 0, [4, 0, 0, 0, value]); // 0x02 0x02: Set position from 0 - 100%
                 } else {
                     meta.logger.debug('owvfni3: Curtain motor position is out of range');
                 }
@@ -2528,14 +2836,14 @@ const converters = {
                 value = value.toLowerCase();
 
                 switch (value) {
-                case 'open':
-                    sendTuyaCommand(entity, 1025, 0, [1, 2]); // 0x04 0x01: Open
-                    break;
                 case 'close':
-                    sendTuyaCommand(entity, 1025, 0, [1, 0]); // 0x04 0x01: Close
+                    await sendTuyaCommand(entity, 1025, 0, [1, 2]); // 0x04 0x01: Close
+                    break;
+                case 'open':
+                    await sendTuyaCommand(entity, 1025, 0, [1, 0]); // 0x04 0x01: Open
                     break;
                 case 'stop':
-                    sendTuyaCommand(entity, 1025, 0, [1, 1]); // 0x04 0x01: Stop
+                    await sendTuyaCommand(entity, 1025, 0, [1, 1]); // 0x04 0x01: Stop
                     break;
                 default:
                     meta.logger.debug('owvfni3: Invalid command received');
@@ -2550,10 +2858,10 @@ const converters = {
             if (value.reverse_direction != undefined) {
                 if (value.reverse_direction) {
                     meta.logger.info('Motor direction reverse');
-                    sendTuyaCommand(entity, 1029, 0, [1, 1]); // 0x04 0x05: Set motor direction to reverse
+                    await sendTuyaCommand(entity, 1029, 0, [1, 1]); // 0x04 0x05: Set motor direction to reverse
                 } else {
                     meta.logger.info('Motor direction forward');
-                    sendTuyaCommand(entity, 1029, 0, [1, 0]); // 0x04 0x05: Set motor direction to forward (default)
+                    await sendTuyaCommand(entity, 1029, 0, [1, 0]); // 0x04 0x05: Set motor direction to forward (default)
                 }
             }
         },
@@ -2611,45 +2919,192 @@ const converters = {
         convertSet: async (entity, key, value, meta) => {
             switch (key) {
             case 'alarm':
-                sendTuyaCommand(entity, 360, 0, [1, value ? 1 : 0]);
+                await sendTuyaCommand(entity, 360, 0, [1, value ? 1 : 0]);
                 break;
             case 'melody':
-                sendTuyaCommand(entity, 1126, 0, [1, parseInt(value, 10)]);
+                await sendTuyaCommand(entity, 1126, 0, [1, parseInt(value, 10)]);
                 break;
             case 'volume':
-                sendTuyaCommand(entity, 1140, 0, [1, {'low': 2, 'medium': 1, 'high': 0}[value]]);
+                await sendTuyaCommand(entity, 1140, 0, [1, {'low': 2, 'medium': 1, 'high': 0}[value]]);
                 break;
             case 'duration':
-                sendTuyaCommand(entity, 615, 0, [4, 0, 0, ...utils.convertDecimalValueTo2ByteHexArray(value)]);
+                await sendTuyaCommand(entity, 615, 0, [4, 0, 0, ...utils.convertDecimalValueTo2ByteHexArray(value)]);
                 break;
             case 'temperature_max':
-                sendTuyaCommand(entity, 620, 0, [4, 0, 0, ...utils.convertDecimalValueTo2ByteHexArray(value)]);
+                await sendTuyaCommand(entity, 620, 0, [4, 0, 0, ...utils.convertDecimalValueTo2ByteHexArray(value)]);
                 break;
             case 'temperature_min':
-                sendTuyaCommand(entity, 619, 0, [4, 0, 0, ...utils.convertDecimalValueTo2ByteHexArray(value)]);
+                await sendTuyaCommand(entity, 619, 0, [4, 0, 0, ...utils.convertDecimalValueTo2ByteHexArray(value)]);
                 break;
             case 'humidity_max':
-                sendTuyaCommand(entity, 621, 0, [4, 0, 0, ...utils.convertDecimalValueTo2ByteHexArray(value)]);
+                await sendTuyaCommand(entity, 621, 0, [4, 0, 0, ...utils.convertDecimalValueTo2ByteHexArray(value)]);
                 break;
             case 'humidity_min':
-                sendTuyaCommand(entity, 622, 0, [4, 0, 0, ...utils.convertDecimalValueTo2ByteHexArray(value)]);
+                await sendTuyaCommand(entity, 622, 0, [4, 0, 0, ...utils.convertDecimalValueTo2ByteHexArray(value)]);
                 break;
             case 'temperature_alarm':
-                sendTuyaCommand(entity, 369, 0, [1, value ? 1 : 0]);
+                await sendTuyaCommand(entity, 369, 0, [1, value ? 1 : 0]);
                 break;
             case 'humidity_alarm':
-                sendTuyaCommand(entity, 370, 0, [1, value ? 1 : 0]);
+                await sendTuyaCommand(entity, 370, 0, [1, value ? 1 : 0]);
                 break;
             default: // Unknown key
                 console.log(`Unhandled key ${key}`);
             }
         },
     },
+    heiman_ir_remote: {
+        key: ['send_key', 'create', 'learn', 'delete', 'get_list'],
+        convertSet: async (entity, key, value, meta) => {
+            switch (key) {
+            case 'send_key':
+                await entity.command('heimanSpecificInfraRedRemote', 'sendKey',
+                    {id: value['id'], keyCode: value['key_code']}, getOptions(meta.mapped, entity));
+                break;
+            case 'create':
+                await entity.command('heimanSpecificInfraRedRemote', 'createId', {modelType: value['model_type']},
+                    getOptions(meta.mapped, entity));
+                break;
+            case 'learn':
+                await entity.command('heimanSpecificInfraRedRemote', 'studyKey',
+                    {id: value['id'], keyCode: value['key_code']}, getOptions(meta.mapped, entity));
+                break;
+            case 'delete':
+                await entity.command('heimanSpecificInfraRedRemote', 'deleteKey',
+                    {id: value['id'], keyCode: value['key_code']}, getOptions(meta.mapped, entity));
+                break;
+            case 'get_list':
+                await entity.command('heimanSpecificInfraRedRemote', 'getIdAndKeyCodeList', {}, getOptions(meta.mapped, entity));
+                break;
+            default: // Unknown key
+                console.log(`Unhandled key ${key}`);
+            }
+        },
+    },
+    scene_store: {
+        key: ['scene_store'],
+        convertSet: async (entity, key, value, meta) => {
+            const isGroup = entity.constructor.name === 'Group';
+            const groupid = isGroup ? entity.groupID : 0;
+            const sceneid = value;
+            const response = await entity.command('genScenes', 'store', {groupid, sceneid}, getOptions(meta.mapped));
+
+            if (isGroup) {
+                if (meta.membersState) {
+                    for (const member of entity.members) {
+                        saveSceneState(member, sceneid, groupid, meta.membersState[member.getDevice().ieeeAddr]);
+                    }
+                }
+            } else if (response.status === 0) {
+                saveSceneState(entity, sceneid, groupid, meta.state);
+            } else {
+                throw new Error(`Scene add not succesfull ('${common.zclStatus[response.status]}')`);
+            }
+
+            return {state: {}};
+        },
+    },
+    scene_recall: {
+        key: ['scene_recall'],
+        convertSet: async (entity, key, value, meta) => {
+            const groupid = entity.constructor.name === 'Group' ? entity.groupID : 0;
+            const sceneid = value;
+            await entity.command('genScenes', 'recall', {groupid, sceneid}, getOptions(meta.mapped));
+
+            const isGroup = entity.constructor.name === 'Group';
+            const metaKey = `${sceneid}_${groupid}`;
+            if (isGroup) {
+                const membersState = {};
+                for (const member of entity.members) {
+                    membersState[member.getDevice().ieeeAddr] = member.meta.scenes[metaKey].state;
+                }
+
+                return {membersState};
+            } else {
+                return {state: entity.meta.scenes[metaKey].state};
+            }
+        },
+    },
+    scene_add: {
+        key: ['scene_add'],
+        convertSet: async (entity, key, value, meta) => {
+            if (typeof value !== 'object' || !value.hasOwnProperty('ID')) {
+                throw new Error('Invalid payload');
+            }
+
+            if (value.hasOwnProperty('color_temp') && value.hasOwnProperty('color')) {
+                throw new Error(`Don't specify both 'color_temp' and 'color'`);
+            }
+
+            const isGroup = entity.constructor.name === 'Group';
+            const groupid = isGroup ? entity.groupID : 0;
+            const sceneid = value.ID;
+            const scenename = '';
+            const transtime = value.hasOwnProperty('transition') ? value.transition : 0;
+
+            const state = {};
+            const extensionfieldsets = [];
+            for (let [attribute, val] of Object.entries(value)) {
+                if (attribute === 'state') {
+                    extensionfieldsets.push({'clstId': 6, 'len': 1, 'extField': [val.toLowerCase() === 'on' ? 1 : 0]});
+                    state['state'] = val.toUpperCase();
+                } else if (attribute === 'brightness') {
+                    extensionfieldsets.push({'clstId': 8, 'len': 1, 'extField': [val]});
+                    state['brightness'] = val;
+                } else if (attribute === 'color_temp') {
+                    extensionfieldsets.push({'clstId': 768, 'len': 13, 'extField': [0, 0, 0, 0, 0, 0, 0, val]});
+                    state['color_temp'] = val;
+                } else if (attribute === 'color') {
+                    try {
+                        val = JSON.parse(val);
+                    } catch (e) {
+                        e;
+                    }
+                    const xy = typeof val === 'string' ? utils.hexToXY(val) : val;
+                    extensionfieldsets.push({'clstId': 768, 'len': 4, 'extField': [Math.round(xy.x * 65535), Math.round(xy.y * 65535)]});
+                    state['color'] = xy;
+                }
+            }
+
+            const response = await entity.command(
+                'genScenes', 'add', {groupid, sceneid, scenename, transtime, extensionfieldsets}, getOptions(meta.mapped),
+            );
+
+            if (isGroup) {
+                if (meta.membersState) {
+                    for (const member of entity.members) {
+                        saveSceneState(member, sceneid, groupid, state);
+                    }
+                }
+            } else if (response.status === 0) {
+                saveSceneState(entity, sceneid, groupid, state);
+            } else {
+                throw new Error(`Scene add not succesfull ('${common.zclStatus[response.status]}')`);
+            }
+
+            return {state: {}};
+        },
+    },
+    TS0003_curtain_switch: {
+        key: ['state'],
+        convertSet: async (entity, key, value, meta) => {
+            const lookup = {'close': 1, 'stop': 2, 'open': 1};
+            const endpointID = lookup[value.toLowerCase()];
+            const endpoint = entity.getDevice().getEndpoint(endpointID);
+            await endpoint.command('genOnOff', 'on', {}, getOptions(meta.mapped, entity));
+        },
+        convertGet: async (entity, key, meta) => {
+            await entity.read('genOnOff', ['onOff']);
+        },
+    },
+
     // Not a converter, can be used by tests to clear the store.
     __clearStore__: () => {
         for (const key of Object.keys(store)) {
             delete store[key];
         }
+
+        globalStore.clear();
     },
 };
 
