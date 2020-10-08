@@ -3779,7 +3779,7 @@ const devices = [
         vendor: 'Custom devices (DiY)',
         description: 'Presslab homelink bridge',
         supports: 'action, temperature',
-        fromZigbee: [fz.cmdToggle, fz.temperature],
+        fromZigbee: [fz.command_toggle, fz.temperature],
         toZigbee: [],
         meta: {configureKey: 1, multiEndpoint: true},
         endpoint: (device) => {

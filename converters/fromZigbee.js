@@ -519,11 +519,11 @@ const converters = {
         type: ['attributeReport', 'readResponse'],
         convert: (model, msg, publish, options, meta) => {
             if (msg.data.hasOwnProperty('lockState')) {
-                const state = getProperty('state', msg, model);
-                const lock_state = getProperty('lock_state', msg, model);
+                const property = postfixWithEndpointName('state', msg, model);
+                const lock_state = postfixWithEndpointName('lock_state', msg, model);
                 const lookup = {0: 'not_fully_locked', 1: 'locked', 2: 'unlocked'};
                 return {
-                    [state]: msg.data.lockState == 1 ? 'LOCK' : 'UNLOCK',
+                    [property]: msg.data.lockState == 1 ? 'LOCK' : 'UNLOCK',
                     [lock_state]: lookup[msg.data['lockState']],
                 };
             }
