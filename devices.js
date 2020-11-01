@@ -4140,6 +4140,7 @@ const devices = [
             await bind(device.getEndpoint(1), coordinatorEndpoint, ['closuresDoorLock']);
             await bind(device.getEndpoint(2), coordinatorEndpoint, ['closuresDoorLock']);
         },
+        exposes: [e.lock().withEndpoint('l1'), e.lock().withEndpoint('l2')],
     },
     {
         zigbeeModel: ['PL-HL'],
@@ -4158,6 +4159,7 @@ const devices = [
             await bind(device.getEndpoint(2), coordinatorEndpoint, ['genOnOff']);
             await bind(device.getEndpoint(3), coordinatorEndpoint, ['genOnOff']);
         },
+        exposes: [e.action(['toggle']).withEndpoint('l1'), e.action(['toggle']).withEndpoint('l2'), e.action(['toggle']).withEndpoint('l3'), e.temperature()],
     },
     {
         zigbeeModel: ['PL-LDSK'],
@@ -4178,6 +4180,10 @@ const devices = [
             await bind(device.getEndpoint(1), coordinatorEndpoint, binds);
         },
         extend: pl.overswitch,
+        exposes: [
+            e.action(['brightness_move_up','brightness_move_down','brightness_stop','on','off']),
+            e.battery(), e.temperature(), e.illuminance()
+            ],
     },
     {
         zigbeeModel: ['PL-OS2'],
@@ -4192,6 +4198,11 @@ const devices = [
             await bind(device.getEndpoint(2), coordinatorEndpoint, ['genOnOff', 'genLevelCtrl']);
         },
         extend: pl.overswitch,
+        exposes: [
+            e.action(['brightness_move_up','brightness_move_down','brightness_stop','on','off']).withEndpoint('1'),
+            e.action(['brightness_move_up','brightness_move_down','brightness_stop','on','off']).withEndpoint('2'),
+            e.battery(), e.temperature(), e.illuminance()
+        ],
     },
     {
         zigbeeModel: ['PL-OS3'],
@@ -4207,6 +4218,12 @@ const devices = [
             await bind(device.getEndpoint(3), coordinatorEndpoint, ['genOnOff', 'genLevelCtrl']);
         },
         extend: pl.overswitch,
+        exposes: [
+            e.action(['brightness_move_up','brightness_move_down','brightness_stop','on','off']).withEndpoint('1'),
+            e.action(['brightness_move_up','brightness_move_down','brightness_stop','on','off']).withEndpoint('2'),
+            e.action(['brightness_move_up','brightness_move_down','brightness_stop','on','off']).withEndpoint('3'),
+            e.battery(), e.temperature(), e.illuminance()
+        ],
     },
     {
         zigbeeModel: ['PL-THMIDEA'],
@@ -4240,6 +4257,7 @@ const devices = [
             await bind(device.getEndpoint(1), coordinatorEndpoint, ['hvacFanCtrl']);
             await bind(device.getEndpoint(2), coordinatorEndpoint, ['genOnOff']);
         },
+        exposes: [e.fan(), e.switch()],
     },
 
     // databyte.ch
