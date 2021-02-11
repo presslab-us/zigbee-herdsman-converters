@@ -4530,8 +4530,8 @@ const devices = [
         },
         extend: pl.overswitch,
         exposes: [
-            e.action(['brightness_move_up','brightness_move_down','brightness_stop','on','off']).withEndpoint('1'),
-            e.action(['brightness_move_up','brightness_move_down','brightness_stop','on','off']).withEndpoint('2'),
+            e.action(['brightness_move_up_1','brightness_move_down_1','brightness_stop_1','on_1','off_1',
+                'brightness_move_up_2','brightness_move_down_2','brightness_stop_2','on_2','off_2']),
             e.battery(), e.temperature(), e.illuminance()
         ],
     },
@@ -4550,9 +4550,9 @@ const devices = [
         },
         extend: pl.overswitch,
         exposes: [
-            e.action(['brightness_move_up','brightness_move_down','brightness_stop','on','off']).withEndpoint('1'),
-            e.action(['brightness_move_up','brightness_move_down','brightness_stop','on','off']).withEndpoint('2'),
-            e.action(['brightness_move_up','brightness_move_down','brightness_stop','on','off']).withEndpoint('3'),
+            e.action(['brightness_move_up_1','brightness_move_down_1','brightness_stop_1','on_1','off_1',
+                'brightness_move_up_2','brightness_move_down_2','brightness_stop_2','on_2','off_2',
+                'brightness_move_up_3','brightness_move_down_3','brightness_stop_3','on_3','off_3']),
             e.battery(), e.temperature(), e.illuminance()
         ],
     },
