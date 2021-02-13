@@ -4462,7 +4462,7 @@ const devices = [
         description: 'Presslab garage door controller',
         supports: 'lock/unlock',
         fromZigbee: [fz.lock],
-        toZigbee: [tz.generic_lock],
+        toZigbee: [tz.lock],
         meta: {configureKey: 1, multiEndpoint: true},
         endpoint: (device) => {
             return {l1: 1, l2: 2};
