@@ -4497,13 +4497,15 @@ const devices = [
         model: 'PL-LDSK',
         vendor: 'Custom devices (DiY)',
         description: 'Presslab desk lamp',
-        extend: hue.light_onoff_brightness,
+        extend: preset.light_onoff_brightness(),
     },
     {
         zigbeeModel: ['PL-OS1'],
         model: 'PL-OS1',
         vendor: 'Custom devices (DiY)',
         description: 'Presslab overswitch single',
+        fromZigbee: [],
+        toZigbee: [],
         configure: async (device, coordinatorEndpoint) => {
             const binds = [
                 'genOnOff', 'genLevelCtrl', 'genPowerCfg', 'msIlluminanceMeasurement', 'msTemperatureMeasurement',
@@ -4521,6 +4523,8 @@ const devices = [
         model: 'PL-OS2',
         vendor: 'Custom devices (DiY)',
         description: 'Presslab overswitch double',
+        fromZigbee: [],
+        toZigbee: [],
         configure: async (device, coordinatorEndpoint) => {
             const binds = [
                 'genOnOff', 'genLevelCtrl', 'genPowerCfg', 'msIlluminanceMeasurement', 'msTemperatureMeasurement',
@@ -4540,6 +4544,8 @@ const devices = [
         model: 'PL-OS3',
         vendor: 'Custom devices (DiY)',
         description: 'Presslab overswitch triple',
+        fromZigbee: [],
+        toZigbee: [],
         configure: async (device, coordinatorEndpoint) => {
             const binds = [
                 'genOnOff', 'genLevelCtrl', 'genPowerCfg', 'msIlluminanceMeasurement', 'msTemperatureMeasurement',
@@ -4562,7 +4568,7 @@ const devices = [
         vendor: 'Custom devices (DiY)',
         description: 'Presslab Midea thermostat interface',
         supports: 'temperature, heating/cooling system control, fan',
-        fromZigbee: [fz.thermostat_att_report, fz.generic_fan_mode],
+        fromZigbee: [fz.legacy.thermostat_att_report, fz.fan],
         toZigbee: [
             tz.thermostat_occupied_heating_setpoint, tz.thermostat_occupied_cooling_setpoint, tz.thermostat_setpoint_raise_lower,
             tz.thermostat_control_sequence_of_operation, tz.thermostat_system_mode, tz.fan_mode,
@@ -4575,7 +4581,7 @@ const devices = [
         exposes: [
             exposes.climate().withSetpoint('occupied_heating_setpoint', 10, 30, 1).withLocalTemperature()
                 .withSystemMode(['off', 'auto', 'heat', 'cool', 'dry']).withRunningState(['idle', 'heat', 'cool'])
-                .withFanMode(['low', 'med', 'high', 'auto']).withSetpoint('occupied_cooling_setpoint', 10, 30, 1)
+                .withFanMode(['low', 'medium', 'high', 'auto']).withSetpoint('occupied_cooling_setpoint', 10, 30, 1)
                 .withLocalTemperatureCalibration().withPiHeatingDemand()],
     },
     {
@@ -4584,7 +4590,7 @@ const devices = [
         vendor: 'Custom devices (DiY)',
         description: 'Presslab Germguardian filter',
         supports: 'fan, on/off',
-        fromZigbee: [fz.generic_fan_mode, fz.PL_GERMFILTER_on_off],
+        fromZigbee: [fz.fan, fz.PL_GERMFILTER_on_off],
         toZigbee: [
             tz.fan_mode, tz.PL_GERMFILTER_on_off,
         ],
