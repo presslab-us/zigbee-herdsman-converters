@@ -314,7 +314,7 @@ const devices = [
         description: 'MiJia wireless switch',
         meta: {battery: {voltageToPercentage: '3V_2100'}},
         fromZigbee: [fz.xiaomi_battery, fz.xiaomi_WXKG01LM_action, fz.legacy.WXKG01LM_click],
-        exposes: [e.battery(), e.action(['single', 'double', 'triple', 'quadruple', 'hold', 'release']), e.voltage()],
+        exposes: [e.battery(), e.action(['single', 'double', 'triple', 'quadruple', 'hold', 'release', 'many']), e.voltage()],
         toZigbee: [],
     },
     {
@@ -5858,7 +5858,7 @@ const devices = [
         model: 'RS 229 T',
         vendor: 'Innr',
         description: 'GU10 spot 350 lm, dimmable, white spectrum',
-        extend: preset.light_onoff_brightness_colortemp({colorTempRange: [153, 555]}),
+        extend: preset.light_onoff_brightness_colortemp({colorTempRange: [200, 454]}),
         meta: {applyRedFix: true, turnsOffAtBrightness1: true},
     },
     {
@@ -7851,8 +7851,8 @@ const devices = [
         model: 'ROB_200-018-0',
         vendor: 'ROBB',
         description: 'ZigBee knob smart dimmer',
-        fromZigbee: [fz.command_on, fz.command_off, fz.command_move_to_level],
-        exposes: [e.action(['on', 'off', 'brightness_move_to_level'])],
+        fromZigbee: [fz.command_on, fz.command_off, fz.command_move_to_level, fz.command_move_to_color_temp],
+        exposes: [e.action(['on', 'off', 'brightness_move_to_level', 'color_temperature_move'])],
         toZigbee: [],
         whiteLabel: [{vendor: 'Sunricher', model: 'SR-ZG2835'}],
     },
@@ -8792,6 +8792,30 @@ const devices = [
         exposes: [e.contact(), e.battery_low(), e.tamper(), e.temperature(), e.battery()],
     },
     {
+        zigbeeModel: ['3450-L'],
+        model: '3450-L',
+        vendor: 'Iris',
+        description: 'Smart fob',
+        fromZigbee: [fz.command_on_presence, fz.command_off, fz.battery, fz.checkin_presence],
+        toZigbee: [],
+        exposes: [e.action(['on_1', 'off_1', 'on_2', 'off_2', 'on_3', 'off_3', 'on_4', 'off_4']),
+            e.battery(), e.presence()],
+        meta: {configureKey: 1, battery: {voltageToPercentage: '3V_2100'}, multiEndpoint: true},
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint1 = device.getEndpoint(1);
+            await reporting.bind(endpoint1, coordinatorEndpoint, ['genOnOff', 'genPowerCfg', 'genPollCtrl']);
+            await reporting.batteryVoltage(endpoint1);
+            const interval = 100 - 10; // 100 seconds is default timeout so set inverval to 10 seconds before
+            await endpoint1.write('genPollCtrl', {'checkinInterval': (interval * 4)});
+            const endpoint2 = device.getEndpoint(2);
+            await reporting.bind(endpoint2, coordinatorEndpoint, ['genOnOff']);
+            const endpoint3 = device.getEndpoint(3);
+            await reporting.bind(endpoint3, coordinatorEndpoint, ['genOnOff']);
+            const endpoint4 = device.getEndpoint(4);
+            await reporting.bind(endpoint4, coordinatorEndpoint, ['genOnOff']);
+        },
+    },
+    {
         zigbeeModel: ['3460-L'],
         model: '3460-L',
         vendor: 'Iris',
@@ -9275,7 +9299,7 @@ const devices = [
         exposes: [e.water_leak(), e.battery_low(), e.tamper()],
     },
     {
-        zigbeeModel: ['CO_00.00.00.15TC'],
+        zigbeeModel: ['CO_00.00.00.15TC', 'CO_00.00.00.22TC'],
         model: 'CO-8ZBS',
         vendor: 'Climax',
         description: 'Smart carbon monoxide sensor',
@@ -12647,20 +12671,20 @@ const devices = [
         model: 'TH1123ZB',
         vendor: 'Sinope',
         description: 'Zigbee line volt thermostat',
-        fromZigbee: [fz.legacy.sinope_thermostat_att_report, fz.legacy.hvac_user_interface, fz.metering, fz.ignore_temperature_report,
-            fz.legacy.sinope_thermostat_state],
+        fromZigbee: [fz.legacy.sinope_thermostat_att_report, fz.legacy.hvac_user_interface, fz.electrical_measurement, fz.metering,
+            fz.ignore_temperature_report, fz.legacy.sinope_thermostat_state],
         toZigbee: [tz.thermostat_local_temperature, tz.thermostat_occupied_heating_setpoint, tz.thermostat_unoccupied_heating_setpoint,
             tz.thermostat_temperature_display_mode, tz.thermostat_keypad_lockout, tz.thermostat_system_mode, tz.thermostat_running_state,
             tz.sinope_thermostat_occupancy, tz.sinope_thermostat_backlight_autodim_param, tz.sinope_thermostat_time,
-            tz.sinope_thermostat_enable_outdoor_temperature, tz.sinope_thermostat_outdoor_temperature],
-        exposes: [e.local_temperature(), e.keypad_lockout(), e.power(), e.energy(),
+            tz.sinope_thermostat_enable_outdoor_temperature, tz.sinope_thermostat_outdoor_temperature, tz.sinope_time_format],
+        exposes: [e.local_temperature(), e.keypad_lockout(), e.power(), e.current(), e.voltage(), e.energy(),
             exposes.climate().withSetpoint('occupied_heating_setpoint', 7, 30, 0.5).withLocalTemperature()
                 .withSystemMode(['off', 'auto', 'heat']).withRunningState(['idle', 'heat'])],
-        meta: {configureKey: 3},
+        meta: {configureKey: 4},
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             const binds = ['genBasic', 'genIdentify', 'genGroups', 'hvacThermostat', 'hvacUserInterfaceCfg', 'msTemperatureMeasurement',
-                'seMetering'];
+                'haElectricalMeasurement', 'seMetering', 'manuSpecificSinope'];
 
             await reporting.bind(endpoint, coordinatorEndpoint, binds);
             await reporting.thermostatTemperature(endpoint, {min: 10, max: 300, change: 20});
@@ -12669,13 +12693,21 @@ const devices = [
             await reporting.thermostatSystemMode(endpoint, {min: 1, max: 0});
 
             await reporting.readMeteringMultiplierDivisor(endpoint);
-
+            await reporting.currentSummDelivered(endpoint, {min: 10, max: 303, change: [1, 1]});
             try {
-                await reporting.thermostatKeypadLockMode(endpoint, {min: 1, max: 0});
-                await reporting.instantaneousDemand(endpoint, {min: 10, max: 303, change: 1});
-            } catch (error) {
-                // Not all support this: https://github.com/Koenkk/zigbee2mqtt/issues/3760
-            }
+                await reporting.instantaneousDemand(endpoint, {min: 10, max: 304, change: 1});
+            } catch (error) {/* Do nothing*/}
+
+            await reporting.readEletricalMeasurementMultiplierDivisors(endpoint);
+            try {
+                await reporting.activePower(endpoint, {min: 10, max: 305, change: 1});
+            } catch (error) {/* Do nothing*/}
+            try {
+                await reporting.rmsCurrent(endpoint, {min: 10, max: 306, change: 100}); // divider 1000: 0.1Arms
+            } catch (error) {/* Do nothing*/}
+            try {
+                await reporting.rmsVoltage(endpoint, {min: 10, max: 307, change: 5}); // divider 10: 0.5Vrms
+            } catch (error) {/* Do nothing*/}
 
             // Disable default reporting
             await reporting.temperature(endpoint, {min: 1, max: 0xFFFF});
@@ -12688,20 +12720,20 @@ const devices = [
         model: 'TH1124ZB',
         vendor: 'Sinope',
         description: 'Zigbee line volt thermostat',
-        fromZigbee: [fz.legacy.thermostat_att_report, fz.legacy.hvac_user_interface, fz.metering, fz.ignore_temperature_report,
-            fz.legacy.sinope_thermostat_state],
+        fromZigbee: [fz.legacy.thermostat_att_report, fz.legacy.hvac_user_interface, fz.electrical_measurement, fz.metering,
+            fz.ignore_temperature_report, fz.legacy.sinope_thermostat_state],
         toZigbee: [tz.thermostat_local_temperature, tz.thermostat_occupied_heating_setpoint, tz.thermostat_unoccupied_heating_setpoint,
             tz.thermostat_temperature_display_mode, tz.thermostat_keypad_lockout, tz.thermostat_system_mode, tz.thermostat_running_state,
             tz.sinope_thermostat_occupancy, tz.sinope_thermostat_backlight_autodim_param, tz.sinope_thermostat_time,
-            tz.sinope_thermostat_enable_outdoor_temperature, tz.sinope_thermostat_outdoor_temperature],
-        exposes: [e.local_temperature(), e.keypad_lockout(), e.power(), e.energy(),
+            tz.sinope_thermostat_enable_outdoor_temperature, tz.sinope_thermostat_outdoor_temperature, tz.sinope_time_format],
+        exposes: [e.local_temperature(), e.keypad_lockout(), e.power(), e.current(), e.voltage(), e.energy(),
             exposes.climate().withSetpoint('occupied_heating_setpoint', 7, 30, 0.5).withLocalTemperature()
                 .withSystemMode(['off', 'auto', 'heat']).withRunningState(['idle', 'heat']).withPiHeatingDemand()],
-        meta: {configureKey: 2},
+        meta: {configureKey: 3},
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             const binds = ['genBasic', 'genIdentify', 'genGroups', 'hvacThermostat', 'hvacUserInterfaceCfg', 'msTemperatureMeasurement',
-                'seMetering'];
+                'haElectricalMeasurement', 'seMetering', 'manuSpecificSinope'];
             await reporting.bind(endpoint, coordinatorEndpoint, binds);
             await reporting.thermostatTemperature(endpoint, {min: 10, max: 300, change: 20});
             await reporting.thermostatPIHeatingDemand(endpoint, {min: 10, max: 301, change: 5});
@@ -12709,10 +12741,23 @@ const devices = [
 
             await reporting.readMeteringMultiplierDivisor(endpoint);
             await reporting.currentSummDelivered(endpoint, {min: 10, max: 303, change: [1, 1]});
+            try {
+                await reporting.instantaneousDemand(endpoint, {min: 10, max: 304, change: 1});
+            } catch (error) {/* Do nothing*/}
+
+            await reporting.readEletricalMeasurementMultiplierDivisors(endpoint);
+            try {
+                await reporting.activePower(endpoint, {min: 10, max: 305, change: 1});
+            } catch (error) {/* Do nothing*/}
+            try {
+                await reporting.rmsCurrent(endpoint, {min: 10, max: 306, change: 100}); // divider 1000: 0.1Arms
+            } catch (error) {/* Do nothing*/}
+            try {
+                await reporting.rmsVoltage(endpoint, {min: 10, max: 307, change: 5}); // divider 10: 0.5Vrms
+            } catch (error) {/* Do nothing*/}
 
             try {
                 await reporting.thermostatKeypadLockMode(endpoint, {min: 1, max: 0});
-                await reporting.instantaneousDemand(endpoint, {min: 10, max: 303, change: 1});
             } catch (error) {
                 // Not all support this: https://github.com/Koenkk/zigbee2mqtt/issues/3760
             }
@@ -13917,7 +13962,7 @@ const devices = [
         description: 'Smart blind controller',
         fromZigbee: [fz.cover_position_tilt, fz.battery],
         toZigbee: [tz.cover_state, tz.cover_position_tilt],
-        meta: {configureKey: 1},
+        meta: {configureKey: 1, coverInverted: true},
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg', 'closuresWindowCovering']);
@@ -14378,7 +14423,8 @@ const devices = [
         },
     },
     {
-        fingerprint: [{modelID: 'TS0601', manufacturerName: '_TZE200_aoclfnxz'}],
+        fingerprint: [{modelID: 'TS0601', manufacturerName: '_TZE200_aoclfnxz'},
+            {modelID: 'TS0601', manufacturerName: '_TZE200_ztvwu4nk'}],
         model: 'BHT-002-GCLZB',
         vendor: 'Moes',
         description: 'Moes BHT series Thermostat',
@@ -15699,6 +15745,13 @@ const devices = [
         description: 'Tint LED bulb E27 806 lumen, dimmable, color, white 1800-6500K',
         extend: preset.light_onoff_brightness_colortemp_colorxy(),
     },
+    {
+        zigbeeModel: ['ZBT-DIMLight-Candle0800'],
+        model: 'HAL600',
+        vendor: 'Schwaiger',
+        description: 'LED candle bulb E14 470 lumen, dimmable, color, white 2700K',
+        extend: preset.light_onoff_brightness(),
+    },
 
     // Zipato
     {
@@ -15927,7 +15980,7 @@ const devices = [
         vendor: 'Niko',
         description: 'Connected socket outlet',
         fromZigbee: [fz.on_off, fz.electrical_measurement],
-        toZigbee: [tz.on_off],
+        toZigbee: [tz.on_off, tz.electrical_measurement_power],
         meta: {configureKey: 5},
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
@@ -15937,7 +15990,7 @@ const devices = [
             await reporting.rmsCurrent(endpoint);
             await reporting.rmsVoltage(endpoint);
         },
-        exposes: [e.switch(), e.power(), e.current(), e.voltage()],
+        exposes: [e.switch(), e.power().withAccess(ea.STATE_GET), e.current(), e.voltage()],
     },
     {
         zigbeeModel: ['Smart plug Zigbee PE'],
@@ -15945,7 +15998,7 @@ const devices = [
         vendor: 'Niko',
         description: 'Smart plug with earthing pin',
         fromZigbee: [fz.on_off, fz.electrical_measurement, fz.metering, fz.power_on_behavior],
-        toZigbee: [tz.on_off, tz.power_on_behavior],
+        toZigbee: [tz.on_off, tz.power_on_behavior, tz.electrical_measurement_power],
         meta: {configureKey: 1},
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
@@ -15958,7 +16011,7 @@ const devices = [
             await reporting.currentSummDelivered(endpoint, {min: 60, change: 1});
         },
         exposes: [
-            e.switch(), e.power(), e.energy(),
+            e.switch(), e.power().withAccess(ea.STATE_GET), e.energy(),
             exposes.enum('power_on_behavior', ea.ALL, ['off', 'previous', 'on'])
                 .withDescription('Controls the behaviour when the device is powered on'),
         ],
@@ -16475,6 +16528,13 @@ const devices = [
         description: 'E27 white and colour bulb',
         extend: preset.light_onoff_brightness_colortemp_colorxy(),
     },
+    {
+        zigbeeModel: ['PROLIGHT E27 WARM WHITE CLEAR'],
+        model: '5412748727432',
+        vendor: 'Prolight',
+        description: 'E27 filament bulb dimmable',
+        extend: preset.light_onoff_brightness(),
+    },
 
     // Fantem
     {
@@ -16495,6 +16555,15 @@ const devices = [
             exposes.enum('sensitivity', ea.STATE_SET, ['low', 'medium', 'high']).withDescription('PIR sensor sensitivity'),
             // eslint-disable-next-line
             exposes.enum('keep_time', ea.STATE_SET, ['0', '30', '60', '120', '240']).withDescription('PIR keep time in seconds')],
+    },
+
+    // Eaton/Halo LED
+    {
+        zigbeeModel: ['Halo_RL5601'],
+        model: 'RL460WHZHA69', // The 4" CAN variant presents as 5/6" zigbeeModel.
+        vendor: 'Eaton/Halo LED',
+        description: 'Wireless Controlled LED retrofit downlight',
+        extend: preset.light_onoff_brightness_colortemp({colorTempRange: [200, 370]}),
     },
 ];
 
