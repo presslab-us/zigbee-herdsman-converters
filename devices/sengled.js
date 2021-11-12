@@ -17,6 +17,14 @@ module.exports = [
         exposes: [e.occupancy(), e.light_brightness()],
     },
     {
+        zigbeeModel: ['E21-N13A'],
+        model: 'E21-N13A',
+        vendor: 'Sengled',
+        description: 'Smart LED (A19)',
+        extend: extend.light_onoff_brightness(),
+        ota: ota.zigbeeOTA,
+    },
+    {
         zigbeeModel: ['E21-N1EA'],
         model: 'E21-N1EA',
         vendor: 'Sengled',
@@ -52,8 +60,13 @@ module.exports = [
         model: 'E11-G13',
         vendor: 'Sengled',
         description: 'Element classic (A19)',
-        extend: extend.light_onoff_brightness(),
+        extend: extend.light_onoff_brightness({noConfigure: true}),
         ota: ota.zigbeeOTA,
+        configure: async (device, coordinatorEndpoint, logger) => {
+            await extend.light_onoff_brightness().configure(device, coordinatorEndpoint, logger);
+            device.powerSource = 'Mains (single phase)';
+            device.save();
+        },
     },
     {
         zigbeeModel: ['E11-G23', 'E11-G33'],
@@ -100,8 +113,13 @@ module.exports = [
         model: 'E11-N1EA',
         vendor: 'Sengled',
         description: 'Element plus color (A19)',
-        extend: extend.light_onoff_brightness_colortemp_color(),
+        extend: extend.light_onoff_brightness_colortemp_color({noConfigure: true}),
         ota: ota.zigbeeOTA,
+        configure: async (device, coordinatorEndpoint, logger) => {
+            await extend.light_onoff_brightness().configure(device, coordinatorEndpoint, logger);
+            device.powerSource = 'Mains (single phase)';
+            device.save();
+        },
     },
     {
         zigbeeModel: ['E11-U2E'],
@@ -196,6 +214,13 @@ module.exports = [
         model: 'E11-N1G',
         vendor: 'Sengled',
         description: 'Vintage LED edison bulb (ST19)',
+        extend: extend.light_onoff_brightness(),
+    },
+    {
+        zigbeeModel: ['E1F-N9G'],
+        model: 'E1F-N9G',
+        vendor: 'Sengled',
+        description: 'Smart LED filament candle (E12)',
         extend: extend.light_onoff_brightness(),
     },
 ];

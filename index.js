@@ -86,6 +86,19 @@ function addDefinition(definition) {
     validateDefinition(definition);
     definitions.splice(0, 0, definition);
 
+    if (!definition.options) definition.options = [];
+    const optionKeys = definition.options.map((o) => o.name);
+    for (const converter of [...definition.toZigbee, ...definition.fromZigbee]) {
+        if (converter.options) {
+            for (const option of converter.options) {
+                if (!optionKeys.includes(option.name)) {
+                    definition.options.push(option);
+                    optionKeys.push(option.name);
+                }
+            }
+        }
+    }
+
     if (definition.hasOwnProperty('fingerprint')) {
         for (const fingerprint of definition.fingerprint) {
             addToLookup(fingerprint.modelID, definition);
@@ -163,6 +176,7 @@ function fingerprintMatch(fingerprint, device) {
         (!fingerprint.softwareBuildID || device.softwareBuildID === fingerprint.softwareBuildID) &&
         (!fingerprint.stackVersion || device.stackVersion === fingerprint.stackVersion) &&
         (!fingerprint.zclVersion || device.zclVersion === fingerprint.zclVersion) &&
+        (!fingerprint.ieeeAddr || device.ieeeAddr.match(fingerprint.ieeeAddr)) &&
         (!fingerprint.endpoints ||
             arrayEquals(device.endpoints.map((e) => e.ID), fingerprint.endpoints.map((e) => e.ID)));
 

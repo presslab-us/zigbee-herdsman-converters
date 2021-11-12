@@ -10,6 +10,7 @@ const ea = exposes.access;
 
 module.exports = [
     {
+        fingerprint: [{modelID: 'TS0212', manufacturerName: '_TYZB01_wpmo3ja3'}],
         zigbeeModel: ['CO_V15', 'CO_YDLV10', 'CO_V16', '1ccaa94c49a84abaa9e38687913947ba'],
         model: 'HS1CA-M',
         description: 'Smart carbon monoxide sensor',
@@ -34,7 +35,7 @@ module.exports = [
         exposes: [e.occupancy(), e.battery_low(), e.tamper()],
     },
     {
-        zigbeeModel: ['SmartPlug'],
+        zigbeeModel: ['SmartPlug', 'SmartPlug-EF-3.0'],
         model: 'HS2SK',
         description: 'Smart metering plug',
         vendor: 'HEIMAN',
@@ -58,6 +59,7 @@ module.exports = [
         vendor: 'HEIMAN',
         fromZigbee: [fz.on_off, fz.electrical_measurement],
         toZigbee: [tz.on_off],
+        options: [exposes.options.measurement_poll_interval()],
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff', 'haElectricalMeasurement']);
@@ -83,7 +85,7 @@ module.exports = [
     },
     {
         zigbeeModel: ['SMOK_V16', 'SMOK_V15', 'b5db59bfd81e4f1f95dc57fdbba17931', '98293058552c49f38ad0748541ee96ba', 'SMOK_YDLV10',
-            'FB56-SMF02HM1.4', 'SmokeSensor-N-3.0', '319fa36e7384414a9ea62cba8f6e7626'],
+            'FB56-SMF02HM1.4', 'SmokeSensor-N-3.0', '319fa36e7384414a9ea62cba8f6e7626', 'c3442b4ac59b4ba1a83119d938f283ab'],
         model: 'HS1SA',
         vendor: 'HEIMAN',
         description: 'Smoke detector',
@@ -111,7 +113,7 @@ module.exports = [
         exposes: [e.smoke(), e.battery_low(), e.battery()],
     },
     {
-        zigbeeModel: ['GASSensor-N'],
+        zigbeeModel: ['GASSensor-N', 'GASSensor-N-3.0'],
         model: 'HS3CG',
         vendor: 'HEIMAN',
         description: 'Combustible gas sensor',
@@ -147,7 +149,7 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg']);
-            await reporting.batteryPercentageRemaining(endpoint, {min: constants.repInterval.MINUTES_5, max: constants.repInterval.HOUR});
+            await reporting.batteryPercentageRemaining(endpoint);
             await endpoint.read('genPowerCfg', ['batteryPercentageRemaining']);
         },
         exposes: [e.contact(), e.battery(), e.battery_low(), e.tamper()],
@@ -162,7 +164,7 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg']);
-            await reporting.batteryPercentageRemaining(endpoint, {min: constants.repInterval.MINUTES_5, max: constants.repInterval.HOUR});
+            await reporting.batteryPercentageRemaining(endpoint);
             await endpoint.read('genPowerCfg', ['batteryPercentageRemaining']);
         },
         exposes: [e.contact(), e.battery_low(), e.tamper(), e.battery()],
@@ -186,7 +188,7 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg']);
-            await reporting.batteryPercentageRemaining(endpoint, {min: constants.repInterval.MINUTES_5, max: constants.repInterval.HOUR});
+            await reporting.batteryPercentageRemaining(endpoint);
             await endpoint.read('genPowerCfg', ['batteryPercentageRemaining']);
         },
         exposes: [e.water_leak(), e.battery_low(), e.tamper(), e.battery()],
@@ -202,7 +204,7 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg']);
-            await reporting.batteryPercentageRemaining(endpoint, {min: constants.repInterval.MINUTES_5, max: constants.repInterval.HOUR});
+            await reporting.batteryPercentageRemaining(endpoint);
             await endpoint.read('genPowerCfg', ['batteryPercentageRemaining']);
         },
     },
@@ -217,7 +219,7 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg']);
-            await reporting.batteryPercentageRemaining(endpoint, {min: constants.repInterval.MINUTES_5, max: constants.repInterval.HOUR});
+            await reporting.batteryPercentageRemaining(endpoint);
             await endpoint.read('genPowerCfg', ['batteryPercentageRemaining']);
         },
         onEvent: async (type, data, device) => {
@@ -239,7 +241,7 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg']);
-            await reporting.batteryPercentageRemaining(endpoint, {min: constants.repInterval.MINUTES_5, max: constants.repInterval.HOUR});
+            await reporting.batteryPercentageRemaining(endpoint);
             await endpoint.read('genPowerCfg', ['batteryPercentageRemaining']);
         },
     },
@@ -332,7 +334,7 @@ module.exports = [
             const endpoint1 = device.getEndpoint(1);
             await reporting.bind(endpoint1, coordinatorEndpoint, ['msTemperatureMeasurement', 'genPowerCfg']);
             await reporting.temperature(endpoint1);
-            await reporting.batteryPercentageRemaining(endpoint1, {min: constants.repInterval.MINUTES_5, max: constants.repInterval.HOUR});
+            await reporting.batteryPercentageRemaining(endpoint1);
             await endpoint1.read('genPowerCfg', ['batteryPercentageRemaining']);
 
             const endpoint2 = device.getEndpoint(2);
@@ -403,7 +405,7 @@ module.exports = [
             const bindClusters = ['msTemperatureMeasurement', 'msRelativeHumidity', 'genPowerCfg'];
             await reporting.bind(endpoint, coordinatorEndpoint, bindClusters);
             await reporting.temperature(endpoint);
-            await reporting.humidity(endpoint, {min: 0, change: 25});
+            await reporting.humidity(endpoint);
             await reporting.batteryVoltage(endpoint);
         },
         exposes: [e.temperature(), e.humidity(), e.battery()],
@@ -419,7 +421,7 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg']);
-            await reporting.batteryPercentageRemaining(endpoint, {min: constants.repInterval.MINUTES_5, max: constants.repInterval.HOUR});
+            await reporting.batteryPercentageRemaining(endpoint);
             await endpoint.read('genPowerCfg', ['batteryPercentageRemaining']);
         },
     },
@@ -434,7 +436,7 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg', 'heimanSpecificScenes']);
-            await reporting.batteryPercentageRemaining(endpoint, {min: constants.repInterval.MINUTES_5, max: constants.repInterval.HOUR});
+            await reporting.batteryPercentageRemaining(endpoint);
         },
     },
     {
@@ -466,7 +468,7 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg']);
-            await reporting.batteryPercentageRemaining(endpoint, {min: constants.repInterval.MINUTES_5, max: constants.repInterval.HOUR});
+            await reporting.batteryPercentageRemaining(endpoint);
             await endpoint.read('genPowerCfg', ['batteryPercentageRemaining']);
         },
         exposes: [e.vibration(), e.battery_low(), e.tamper(), e.battery()],
@@ -481,7 +483,7 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg']);
-            await reporting.batteryPercentageRemaining(endpoint, {min: constants.repInterval.MINUTES_5, max: constants.repInterval.HOUR});
+            await reporting.batteryPercentageRemaining(endpoint);
             await endpoint.read('genPowerCfg', ['batteryPercentageRemaining']);
         },
         exposes: [e.vibration(), e.battery_low(), e.tamper(), e.battery()],
@@ -562,7 +564,7 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg', 'heimanSpecificInfraRedRemote']);
-            await reporting.batteryPercentageRemaining(endpoint, {min: constants.repInterval.MINUTES_5, max: constants.repInterval.HOUR});
+            await reporting.batteryPercentageRemaining(endpoint);
         },
     },
     {
@@ -668,5 +670,19 @@ module.exports = [
         fromZigbee: [fz.ias_occupancy_alarm_1],
         toZigbee: [],
         exposes: [e.occupancy(), e.battery_low(), e.tamper()],
+    },
+    {
+        fingerprint: [{modelID: 'DoorBell-EM', manufacturerName: 'HEIMAN'}],
+        model: 'HS2DB',
+        vendor: 'HEIMAN',
+        description: 'Smart doorbell button',
+        fromZigbee: [fz.battery, fz.heiman_doorbell_button, fz.ignore_basic_report],
+        toZigbee: [],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg']);
+            await reporting.batteryPercentageRemaining(endpoint);
+        },
+        exposes: [e.battery(), e.action(['pressed']), e.battery_low(), e.tamper()],
     },
 ];

@@ -51,7 +51,7 @@ module.exports = [
         model: 'AC10787',
         vendor: 'OSRAM',
         description: 'SMART+ classic E27 TW',
-        extend: extend.ledvance.light_onoff_brightness_colortemp(),
+        extend: extend.ledvance.light_onoff_brightness_colortemp({colorTempRange: [153, 370]}),
         ota: ota.ledvance,
     },
     {
@@ -142,7 +142,7 @@ module.exports = [
         model: 'AB32840',
         vendor: 'OSRAM',
         description: 'LIGHTIFY LED Classic B40 tunable white',
-        extend: extend.ledvance.light_onoff_brightness_colortemp(),
+        extend: extend.ledvance.light_onoff_brightness_colortemp({colorTempRange: [150, 370]}),
         ota: ota.ledvance,
     },
     {
@@ -295,7 +295,7 @@ module.exports = [
         model: 'AC01353010G',
         vendor: 'OSRAM',
         description: 'SMART+ Motion Sensor',
-        fromZigbee: [fz.temperature, fz.ias_occupancy_alarm_2, fz.ignore_basic_report],
+        fromZigbee: [fz.temperature, fz.ias_occupancy_only_alarm_2, fz.ignore_basic_report],
         toZigbee: [],
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
@@ -303,7 +303,7 @@ module.exports = [
             await reporting.temperature(endpoint);
             await reporting.batteryVoltage(endpoint);
         },
-        exposes: [e.temperature(), e.occupancy(), e.battery_low(), e.tamper()],
+        exposes: [e.temperature(), e.occupancy()],
     },
     {
         zigbeeModel: ['MR16 TW OSRAM'],
@@ -315,7 +315,7 @@ module.exports = [
     },
     {
         zigbeeModel: ['Lightify Switch Mini', 'Lightify Switch Mini blue'],
-        model: 'AC0251100NJ/AC0251700NJ',
+        model: 'AC0251100NJ/AC0251600NJ/AC0251700NJ',
         vendor: 'OSRAM',
         description: 'Smart+ switch mini',
         fromZigbee: [fz.legacy.osram_lightify_switch_cmdOn, fz.legacy.osram_lightify_switch_cmdMoveWithOnOff,
@@ -385,8 +385,12 @@ module.exports = [
         zigbeeModel: ['Zigbee 3.0 DALI CONV LI'],
         model: '4062172044776',
         vendor: 'OSRAM',
-        description: 'OSRAM Zigbee 3.0 DALI CONV LI dimmer for DALI-based luminaires',
+        description: 'Zigbee 3.0 DALI CONV LI dimmer for DALI-based luminaires',
         extend: extend.ledvance.light_onoff_brightness(),
-        ota: ota.ledvance,
+        exposes: [e.light_brightness().withEndpoint('l1'), e.light_brightness().withEndpoint('l2')],
+        endpoint: (device) => {
+            return {'l1': 10, 'l2': 11};
+        },
+        meta: {multiEndpoint: true},
     },
 ];

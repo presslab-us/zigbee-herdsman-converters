@@ -52,6 +52,9 @@ module.exports = [
         toZigbee: [tz.livolo_socket_switch_on_off],
         extend: extend.switch(),
         configure: poll,
+        endpoint: (device) => {
+            return {'left': 6, 'right': 6};
+        },
         onEvent: async (type, data, device) => {
             if (type === 'stop') {
                 clearInterval(globalStore.getValue(device, 'interval'));
@@ -75,6 +78,35 @@ module.exports = [
         vendor: 'Livolo',
         fromZigbee: [fz.livolo_new_switch_state_2gang],
         toZigbee: [tz.livolo_socket_switch_on_off],
+        exposes: [e.switch().withEndpoint('left'), e.switch().withEndpoint('right')],
+        configure: poll,
+        endpoint: (device) => {
+            return {'left': 6, 'right': 6};
+        },
+        onEvent: async (type, data, device) => {
+            if (type === 'stop') {
+                clearInterval(globalStore.getValue(device, 'interval'));
+                globalStore.clearValue(device, 'interval');
+            }
+            if (['start', 'deviceAnnounce'].includes(type)) {
+                await poll(device);
+                if (!globalStore.hasValue(device, 'interval')) {
+                    const interval = setInterval(async () => {
+                        await poll(device);
+                    }, 300*1000); // Every 300 seconds
+                    globalStore.putValue(device, 'interval', interval);
+                }
+            }
+        },
+    },
+    {
+        zigbeeModel: ['TI0001-curtain-switch'],
+        model: 'TI0001-curtain-switch',
+        description: 'Zigbee curtain switch (can only read status, control does not work yet)',
+        vendor: 'Livolo',
+        fromZigbee: [fz.livolo_curtain_switch_state],
+        toZigbee: [tz.livolo_socket_switch_on_off],
+        // toZigbee: [tz.livolo_curtain_switch_on_off],
         exposes: [e.switch().withEndpoint('left'), e.switch().withEndpoint('right')],
         configure: poll,
         endpoint: (device) => {
@@ -130,6 +162,9 @@ module.exports = [
         toZigbee: [tz.livolo_socket_switch_on_off, tz.livolo_dimmer_level],
         exposes: [e.light_brightness()],
         configure: poll,
+        endpoint: (device) => {
+            return {'left': 6, 'right': 6};
+        },
         onEvent: async (type, data, device) => {
             if (type === 'stop') {
                 clearInterval(globalStore.getValue(device, 'interval'));

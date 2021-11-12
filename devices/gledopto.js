@@ -62,11 +62,12 @@ module.exports = [
         extend: gledoptoExtend.light_onoff_brightness(),
     },
     {
-        zigbeeModel: ['GL-SD-001 '],
-        model: 'GL-SD-001 ',
+        zigbeeModel: ['GL-SD-001'],
+        model: 'GL-SD-001',
         vendor: 'Gledopto',
         description: 'Zigbee triac AC dimmer',
         extend: gledoptoExtend.light_onoff_brightness(),
+        meta: {disableDefaultResponse: true},
     },
     {
         zigbeeModel: ['GL-C-006'],
@@ -149,7 +150,7 @@ module.exports = [
         model: 'GL-C-007S',
         vendor: 'Gledopto',
         description: 'Zigbee LED Controller RGBW (plus)',
-        extend: gledoptoExtend.light_onoff_brightness_color(),
+        extend: gledoptoExtend.light_onoff_brightness_colortemp_color(),
     },
     {
         zigbeeModel: ['GL-C-007P'],
@@ -552,6 +553,14 @@ module.exports = [
         ota: ota.zigbeeOTA,
         description: 'Zigbee 12W Garden Lamp RGB+CCT (pro)',
         extend: gledoptoExtend.light_onoff_brightness_colortemp_color(),
+    },
+    {
+        zigbeeModel: ['GL-G-002P'],
+        model: 'GL-G-002P',
+        vendor: 'Gledopto',
+        ota: ota.zigbeeOTA,
+        description: 'Zigbee 7W garden lamp RGB+CCT (pro)',
+        extend: gledoptoExtend.light_onoff_brightness_colortemp_color({colorTempRange: [150, 500]}),
     },
     {
         zigbeeModel: ['GL-G-007Z'],

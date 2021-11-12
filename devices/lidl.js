@@ -31,7 +31,7 @@ module.exports = [
         fingerprint: [{modelID: 'TS0211', manufacturerName: '_TZ1800_ladpngdx'}],
         model: 'HG06668',
         vendor: 'Lidl',
-        description: 'Silvercrest smart wireless door bell',
+        description: 'Silvercrest smart wireless door bell button',
         fromZigbee: [fz.battery, fz.tuya_doorbell_button, fz.ignore_basic_report],
         toZigbee: [],
         configure: async (device, coordinatorEndpoint, logger) => {
@@ -134,6 +134,28 @@ module.exports = [
         },
     },
     {
+        fingerprint: [{modelID: 'TS0505B', manufacturerName: '_TZ3000_quqaeew6'}],
+        model: 'HG07834A',
+        vendor: 'Lidl',
+        description: 'Livarno Lux GU10 spot RGB',
+        ...extend.light_onoff_brightness_colortemp_color({disableColorTempStartup: true, colorTempRange: [153, 500]}),
+        meta: {applyRedFix: true, enhancedHue: false},
+        configure: async (device, coordinatorEndpoint, logger) => {
+            device.getEndpoint(1).saveClusterAttributeKeyValue('lightingColorCtrl', {colorCapabilities: 29});
+        },
+    },
+    {
+        fingerprint: [{modelID: 'TS0505B', manufacturerName: '_TZ3000_th6zqqy6'}],
+        model: 'HG07834B',
+        vendor: 'Lidl',
+        description: 'Livarno Lux E14 candle RGB',
+        ...extend.light_onoff_brightness_colortemp_color({disableColorTempStartup: true, colorTempRange: [153, 500]}),
+        meta: {applyRedFix: true, enhancedHue: false},
+        configure: async (device, coordinatorEndpoint, logger) => {
+            device.getEndpoint(1).saveClusterAttributeKeyValue('lightingColorCtrl', {colorCapabilities: 29});
+        },
+    },
+    {
         fingerprint: [{modelID: 'TS0505A', manufacturerName: '_TZ3000_kdpxju99'}],
         model: 'HG06106A',
         vendor: 'Lidl',
@@ -150,6 +172,17 @@ module.exports = [
         vendor: 'Lidl',
         description: 'Livarno Lux E27 bulb RGB',
         ...extend.light_onoff_brightness_colortemp_color({disableColorTempStartup: true}),
+        meta: {applyRedFix: true, enhancedHue: false},
+        configure: async (device, coordinatorEndpoint, logger) => {
+            device.getEndpoint(1).saveClusterAttributeKeyValue('lightingColorCtrl', {colorCapabilities: 29});
+        },
+    },
+    {
+        fingerprint: [{modelID: 'TS0505B', manufacturerName: '_TZ3000_qd7hej8u'}],
+        model: 'HG07834C',
+        vendor: 'Lidl',
+        description: 'Livarno Lux E27 bulb RGB',
+        ...extend.light_onoff_brightness_colortemp_color({disableColorTempStartup: true, colorTempRange: [153, 500]}),
         meta: {applyRedFix: true, enhancedHue: false},
         configure: async (device, coordinatorEndpoint, logger) => {
             device.getEndpoint(1).saveClusterAttributeKeyValue('lightingColorCtrl', {colorCapabilities: 29});
@@ -228,5 +261,44 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {},
         exposes: [e.switch(), exposes.numeric('timer', ea.SET).withValueMin(1)
             .withUnit('min').withDescription('Auto off after specific time.')],
+    },
+    {
+        fingerprint: [{modelID: 'TS0501A', manufacturerName: '_TZ3000_j2w1dw29'}],
+        model: 'HG06463A',
+        vendor: 'Lidl',
+        description: 'Livarno Lux E27 ST64 filament bulb',
+        extend: extend.light_onoff_brightness({disableEffect: true}),
+        meta: {turnsOffAtBrightness1: false},
+    },
+    {
+        fingerprint: [{modelID: 'TS0501A', manufacturerName: '_TZ3000_nosnx7im'}],
+        model: 'HG06463B',
+        vendor: 'Lidl',
+        description: 'Livarno Lux E27 G30 filament bulb',
+        extend: extend.light_onoff_brightness({disableEffect: true}),
+        meta: {turnsOffAtBrightness1: false},
+    },
+    {
+        fingerprint: [
+            {modelID: 'TS0501A', manufacturerName: '_TZ3000_7dcddnye'},
+            {modelID: 'TS0501A', manufacturerName: '_TZ3000_nbnmw9nc'}, // UK
+        ],
+        model: 'HG06462A',
+        vendor: 'Lidl',
+        description: 'Livarno Lux E27 A60 filament bulb',
+        extend: extend.light_onoff_brightness({disableEffect: true}),
+        meta: {turnsOffAtBrightness1: false},
+    },
+    {
+        fingerprint: [{modelID: 'TS0101', manufacturerName: '_TZ3000_pnzfdr9y'}],
+        model: 'HG06619',
+        vendor: 'Lidl',
+        description: 'Silvercrest oudoor plug',
+        extend: extend.switch(),
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff']);
+            await reporting.onOff(endpoint);
+        },
     },
 ];

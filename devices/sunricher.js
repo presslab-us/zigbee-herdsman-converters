@@ -26,10 +26,22 @@ module.exports = [
         meta: {multiEndpoint: true},
     },
     {
-        zigbeeModel: ['ZGRC-KEY-013'],
-        model: 'ZGRC-KEY-013',
+        zigbeeModel: ['ZGRC-KEY-009'],
+        model: '50208693',
         vendor: 'Sunricher',
-        description: '3 zone remote and dimmer',
+        description: 'Zigbee wall remote control for RGBW, 1 zone with 2 scenes',
+        fromZigbee: [fz.command_on, fz.command_off, fz.command_move, fz.command_stop, fz.battery,
+            fz.command_recall, fz.command_step, fz.command_move_to_color, fz.command_move_to_color_temp],
+        toZigbee: [],
+        exposes: [e.battery(), e.action(['on', 'off',
+            'brightness_move_up', 'brightness_move_down', 'brightness_move_stop', 'brightness_step_up', 'brightness_step_down',
+            'recall_1', 'recall_2'])],
+    },
+    {
+        zigbeeModel: ['ZGRC-KEY-013'],
+        model: 'SR-ZG9001K12-DIM-Z4',
+        vendor: 'Sunricher',
+        description: '4 zone remote and dimmer',
         fromZigbee: [fz.battery, fz.command_move, fz.legacy.ZGRC013_brightness_onoff,
             fz.legacy.ZGRC013_brightness, fz.command_stop, fz.legacy.ZGRC013_brightness_stop, fz.command_on,
             fz.legacy.ZGRC013_cmdOn, fz.command_off, fz.legacy.ZGRC013_cmdOff, fz.command_recall],
@@ -38,9 +50,10 @@ module.exports = [
         whiteLabel: [{vendor: 'RGB Genie', model: 'ZGRC-KEY-013'}],
         meta: {multiEndpoint: true, battery: {dontDividePercentage: true}},
         configure: async (device, coordinatorEndpoint, logger) => {
-            const endpoint = device.getEndpoint(1);
-            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff']);
-            await reporting.onOff(endpoint);
+            await reporting.bind(device.getEndpoint(1), coordinatorEndpoint, ['genOnOff', 'genScenes']);
+            await reporting.bind(device.getEndpoint(2), coordinatorEndpoint, ['genOnOff']);
+            await reporting.bind(device.getEndpoint(3), coordinatorEndpoint, ['genOnOff']);
+            await reporting.bind(device.getEndpoint(4), coordinatorEndpoint, ['genOnOff']);
         },
     },
     {
@@ -160,7 +173,7 @@ module.exports = [
         },
     },
     {
-        zigbeeModel: ['Micro Smart OnOff'],
+        zigbeeModel: ['Micro Smart OnOff', 'HK-SL-RELAY-A'],
         model: 'SR-ZG9100A-S',
         vendor: 'Sunricher',
         description: 'Zigbee AC in wall switch single-line',
