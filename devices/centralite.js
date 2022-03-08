@@ -27,6 +27,26 @@ module.exports = [
         },
     },
     {
+        zigbeeModel: ['4256050-ZHAC'],
+        model: '4256050-ZHAC',
+        vendor: 'Centralite',
+        description: '3-Series smart dimming outlet',
+        fromZigbee: [fz.restorable_brightness, fz.on_off, fz.electrical_measurement],
+        toZigbee: [tz.light_onoff_restorable_brightness],
+        exposes: [e.light_brightness(), e.power(), e.voltage(), e.current()],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff', 'genLevelCtrl', 'haElectricalMeasurement']);
+            await reporting.onOff(endpoint);
+            // 4256050-ZHAC doesn't support reading 'acVoltageMultiplier' or 'acVoltageDivisor'
+            await endpoint.read('haElectricalMeasurement', ['acCurrentMultiplier', 'acCurrentDivisor']);
+            await endpoint.read('haElectricalMeasurement', ['acPowerMultiplier', 'acPowerDivisor']);
+            await reporting.rmsVoltage(endpoint, {change: 2}); // Voltage reports in V
+            await reporting.rmsCurrent(endpoint, {change: 10}); // Current reports in mA
+            await reporting.activePower(endpoint, {change: 2}); // Power reports in 0.1W
+        },
+    },
+    {
         zigbeeModel: ['4257050-ZHAC'],
         model: '4257050-ZHAC',
         vendor: 'Centralite',
@@ -154,7 +174,8 @@ module.exports = [
         exposes: [e.battery(), exposes.climate().withSetpoint('occupied_heating_setpoint', 10, 30, 1).withLocalTemperature()
             .withSystemMode(['off', 'heat', 'cool', 'emergency_heating'])
             .withRunningState(['idle', 'heat', 'cool', 'fan_only']).withFanMode(['auto', 'on'])
-            .withSetpoint('occupied_cooling_setpoint', 10, 30, 1).withLocalTemperatureCalibration()],
+            .withSetpoint('occupied_cooling_setpoint', 10, 30, 1)
+            .withLocalTemperatureCalibration(-30, 30, 0.1)],
         meta: {battery: {voltageToPercentage: '3V_1500_2800'}},
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
@@ -175,11 +196,15 @@ module.exports = [
             tz.thermostat_occupied_heating_setpoint, tz.thermostat_occupied_cooling_setpoint,
             tz.thermostat_setpoint_raise_lower, tz.thermostat_remote_sensing,
             tz.thermostat_control_sequence_of_operation, tz.thermostat_system_mode,
-            tz.thermostat_relay_status_log, tz.fan_mode, tz.thermostat_running_state],
-        exposes: [e.battery(), exposes.climate().withSetpoint('occupied_heating_setpoint', 10, 30, 1).withLocalTemperature()
-            .withSystemMode(['off', 'heat', 'cool', 'emergency_heating'])
-            .withRunningState(['idle', 'heat', 'cool', 'fan_only']).withFanMode(['auto', 'on'])
-            .withSetpoint('occupied_cooling_setpoint', 10, 30, 1).withLocalTemperatureCalibration()],
+            tz.thermostat_relay_status_log, tz.fan_mode, tz.thermostat_running_state, tz.thermostat_temperature_setpoint_hold],
+        exposes: [e.battery(),
+            exposes.binary('temperature_setpoint_hold', ea.ALL, true, false)
+                .withDescription('Prevent changes. `false` = run normally. `true` = prevent from making changes.'),
+            exposes.climate().withSetpoint('occupied_heating_setpoint', 10, 30, 1).withLocalTemperature()
+                .withSystemMode(['off', 'heat', 'cool', 'emergency_heating'])
+                .withRunningState(['idle', 'heat', 'cool', 'fan_only']).withFanMode(['auto', 'on'])
+                .withSetpoint('occupied_cooling_setpoint', 10, 30, 1)
+                .withLocalTemperatureCalibration(-30, 30, 0.1)],
         meta: {battery: {voltageToPercentage: '3V_1500_2800'}},
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
@@ -188,6 +213,7 @@ module.exports = [
             await reporting.thermostatRunningState(endpoint);
             await reporting.thermostatTemperature(endpoint);
             await reporting.fanMode(endpoint);
+            await reporting.thermostatTemperatureSetpointHold(endpoint);
         },
     },
     {

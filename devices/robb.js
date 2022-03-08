@@ -139,9 +139,11 @@ module.exports = [
         model: 'ROB_200-018-0',
         vendor: 'ROBB',
         description: 'ZigBee knob smart dimmer',
-        fromZigbee: [fz.command_on, fz.command_off, fz.command_move_to_level, fz.command_move_to_color_temp],
-        exposes: [e.action(['on', 'off', 'brightness_move_to_level', 'color_temperature_move'])],
+        fromZigbee: [fz.command_on, fz.command_off, fz.command_move_to_level, fz.command_move_to_color_temp, fz.battery,
+            fz.command_move_to_color],
+        exposes: [e.battery(), e.action(['on', 'off', 'brightness_move_to_level', 'color_temperature_move', 'color_move'])],
         toZigbee: [],
+        meta: {multiEndpoint: true, battery: {dontDividePercentage: true}},
         whiteLabel: [{vendor: 'Sunricher', model: 'SR-ZG2835'}],
     },
     {
@@ -161,5 +163,41 @@ module.exports = [
             await reporting.activePower(endpoint);
         },
         exposes: [e.power(), e.current(), e.voltage().withAccess(ea.STATE), e.switch(), e.energy()],
+    },
+    {
+        zigbeeModel: ['ROB_200-017-1'],
+        model: 'ROB_200-017-1',
+        vendor: 'ROBB',
+        description: 'Zigbee smart plug',
+        fromZigbee: [fz.electrical_measurement, fz.on_off, fz.ignore_genLevelCtrl_report, fz.metering, fz.temperature],
+        toZigbee: [tz.on_off],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint,
+                ['genOnOff', 'haElectricalMeasurement', 'seMetering', 'msTemperatureMeasurement']);
+            await reporting.onOff(endpoint);
+            await reporting.readEletricalMeasurementMultiplierDivisors(endpoint);
+            await reporting.readMeteringMultiplierDivisor(endpoint);
+            await reporting.rmsVoltage(endpoint);
+            await reporting.rmsCurrent(endpoint);
+            await reporting.activePower(endpoint);
+            await reporting.temperature(endpoint);
+            await reporting.currentSummDelivered(endpoint);
+        },
+        exposes: [e.power(), e.current(), e.voltage().withAccess(ea.STATE), e.switch(), e.energy(), e.temperature()],
+    },
+    {
+        zigbeeModel: ['ROB_200-016-0'],
+        model: 'ROB_200-016-0',
+        vendor: 'ROBB smart',
+        description: 'RGB CCT DIM 3 in 1 Zigbee Remote',
+        fromZigbee: [fz.battery, fz.command_move_to_color, fz.command_move_to_color_temp, fz.command_move_hue,
+            fz.command_step, fz.command_recall, fz.command_on, fz.command_off, fz.command_toggle, fz.command_stop,
+            fz.command_move, fz.command_color_loop_set, fz.command_ehanced_move_to_hue_and_saturation],
+        toZigbee: [],
+        exposes: [e.battery(), e.action([
+            'color_move', 'color_temperature_move', 'hue_move', 'brightness_step_up', 'brightness_step_down',
+            'recall_*', 'on', 'off', 'toggle', 'brightness_stop', 'brightness_move_up', 'brightness_move_down',
+            'color_loop_set', 'enhanced_move_to_hue_and_saturation', 'hue_stop'])],
     },
 ];
