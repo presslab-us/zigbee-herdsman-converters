@@ -13,21 +13,33 @@ module.exports = [
         model: 'TH1123ZB',
         vendor: 'Sinopé',
         description: 'Zigbee line volt thermostat',
-        fromZigbee: [fz.legacy.sinope_thermostat_att_report, fz.legacy.hvac_user_interface, fz.electrical_measurement, fz.metering,
-            fz.ignore_temperature_report, fz.legacy.sinope_thermostat_state],
-        toZigbee: [tz.thermostat_local_temperature, tz.thermostat_occupied_heating_setpoint, tz.thermostat_unoccupied_heating_setpoint,
+        meta: {thermostat: {dontMapPIHeatingDemand: true}},
+        fromZigbee: [
+            fz.legacy.sinope_thermostat_att_report, fz.legacy.hvac_user_interface, fz.electrical_measurement, fz.metering,
+            fz.ignore_temperature_report, fz.legacy.sinope_thermostat_state, fz.sinope_thermostat],
+        toZigbee: [
+            tz.thermostat_local_temperature, tz.thermostat_occupied_heating_setpoint, tz.thermostat_unoccupied_heating_setpoint,
             tz.thermostat_temperature_display_mode, tz.thermostat_keypad_lockout, tz.thermostat_system_mode, tz.thermostat_running_state,
             tz.sinope_thermostat_occupancy, tz.sinope_thermostat_backlight_autodim_param, tz.sinope_thermostat_time,
             tz.sinope_thermostat_enable_outdoor_temperature, tz.sinope_thermostat_outdoor_temperature, tz.sinope_time_format],
-        exposes: [e.local_temperature(), e.keypad_lockout(), e.power(), e.current(), e.voltage(), e.energy(),
-            exposes.climate().withSetpoint('occupied_heating_setpoint', 7, 30, 0.5).withLocalTemperature()
-                .withSystemMode(['off', 'auto', 'heat']).withRunningState(['idle', 'heat']),
-            exposes.enum('backlight_auto_dim', ea.SET, ['on demand', 'sensing']).withDescription('Control backlight dimming behavior')],
+        exposes: [
+            exposes.climate()
+                .withSetpoint('occupied_heating_setpoint', 5, 30, 0.5)
+                .withSetpoint('unoccupied_heating_setpoint', 5, 30, 0.5)
+                .withLocalTemperature()
+                .withSystemMode(['off', 'heat']).withRunningState(['idle', 'heat'])
+                .withPiHeatingDemand(),
+            exposes.enum('thermostat_occupancy', ea.SET, ['unoccupied', 'occupied'])
+                .withDescription('Occupancy state of the thermostat'),
+            exposes.enum('backlight_auto_dim', ea.SET, ['on demand', 'sensing'])
+                .withDescription('Control backlight dimming behavior'),
+            e.keypad_lockout(), e.energy(), e.power(), e.current(), e.voltage()],
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
-            const binds = ['genBasic', 'genIdentify', 'genGroups', 'hvacThermostat', 'hvacUserInterfaceCfg', 'msTemperatureMeasurement',
-                'haElectricalMeasurement', 'seMetering', 'manuSpecificSinope'];
-
+            const binds = [
+                'genBasic', 'genIdentify', 'genGroups', 'hvacThermostat', 'hvacUserInterfaceCfg',
+                'msTemperatureMeasurement', 'haElectricalMeasurement', 'seMetering',
+                'manuSpecificSinope'];
             await reporting.bind(endpoint, coordinatorEndpoint, binds);
             await reporting.thermostatTemperature(endpoint);
             await reporting.thermostatPIHeatingDemand(endpoint);
@@ -60,8 +72,8 @@ module.exports = [
 
             // Disable default reporting
             await reporting.temperature(endpoint, {min: 1, max: 0xFFFF});
-            await endpoint.configureReporting('msTemperatureMeasurement', [{
-                attribute: 'tolerance', minimumReportInterval: 1, maximumReportInterval: 0xFFFF, reportableChange: 1}]);
+            await endpoint.configureReporting('msTemperatureMeasurement', [
+                {attribute: 'tolerance', minimumReportInterval: 1, maximumReportInterval: 0xFFFF, reportableChange: 1}]);
         },
     },
     {
@@ -69,20 +81,33 @@ module.exports = [
         model: 'TH1124ZB',
         vendor: 'Sinopé',
         description: 'Zigbee line volt thermostat',
-        fromZigbee: [fz.legacy.sinope_thermostat_att_report, fz.legacy.hvac_user_interface, fz.electrical_measurement, fz.metering,
-            fz.ignore_temperature_report, fz.legacy.sinope_thermostat_state],
-        toZigbee: [tz.thermostat_local_temperature, tz.thermostat_occupied_heating_setpoint, tz.thermostat_unoccupied_heating_setpoint,
+        meta: {thermostat: {dontMapPIHeatingDemand: true}},
+        fromZigbee: [
+            fz.legacy.sinope_thermostat_att_report, fz.legacy.hvac_user_interface, fz.electrical_measurement, fz.metering,
+            fz.ignore_temperature_report, fz.legacy.sinope_thermostat_state, fz.sinope_thermostat],
+        toZigbee: [
+            tz.thermostat_local_temperature, tz.thermostat_occupied_heating_setpoint, tz.thermostat_unoccupied_heating_setpoint,
             tz.thermostat_temperature_display_mode, tz.thermostat_keypad_lockout, tz.thermostat_system_mode, tz.thermostat_running_state,
             tz.sinope_thermostat_occupancy, tz.sinope_thermostat_backlight_autodim_param, tz.sinope_thermostat_time,
             tz.sinope_thermostat_enable_outdoor_temperature, tz.sinope_thermostat_outdoor_temperature, tz.sinope_time_format],
-        exposes: [e.local_temperature(), e.keypad_lockout(), e.power(), e.current(), e.voltage(), e.energy(),
-            exposes.climate().withSetpoint('occupied_heating_setpoint', 7, 30, 0.5).withLocalTemperature()
-                .withSystemMode(['off', 'auto', 'heat']).withRunningState(['idle', 'heat']).withPiHeatingDemand(),
-            exposes.enum('backlight_auto_dim', ea.SET, ['on demand', 'sensing']).withDescription('Control backlight dimming behavior')],
+        exposes: [
+            exposes.climate()
+                .withSetpoint('occupied_heating_setpoint', 5, 30, 0.5)
+                .withSetpoint('unoccupied_heating_setpoint', 5, 30, 0.5)
+                .withLocalTemperature()
+                .withSystemMode(['off', 'heat']).withRunningState(['idle', 'heat'])
+                .withPiHeatingDemand(),
+            exposes.enum('thermostat_occupancy', ea.SET, ['unoccupied', 'occupied'])
+                .withDescription('Occupancy state of the thermostat'),
+            exposes.enum('backlight_auto_dim', ea.SET, ['on demand', 'sensing'])
+                .withDescription('Control backlight dimming behavior'),
+            e.keypad_lockout(), e.energy(), e.power(), e.current(), e.voltage()],
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
-            const binds = ['genBasic', 'genIdentify', 'genGroups', 'hvacThermostat', 'hvacUserInterfaceCfg', 'msTemperatureMeasurement',
-                'haElectricalMeasurement', 'seMetering', 'manuSpecificSinope'];
+            const binds = [
+                'genBasic', 'genIdentify', 'genGroups', 'hvacThermostat', 'hvacUserInterfaceCfg',
+                'msTemperatureMeasurement', 'haElectricalMeasurement', 'seMetering',
+                'manuSpecificSinope'];
             await reporting.bind(endpoint, coordinatorEndpoint, binds);
             await reporting.thermostatTemperature(endpoint);
             await reporting.thermostatPIHeatingDemand(endpoint);
@@ -91,6 +116,12 @@ module.exports = [
             try {
                 await reporting.thermostatRunningState(endpoint);
             } catch (error) {/* Not all support this */}
+
+            await reporting.readMeteringMultiplierDivisor(endpoint);
+            await reporting.currentSummDelivered(endpoint, {min: 10, max: 303, change: [1, 1]});
+            try {
+                await reporting.instantaneousDemand(endpoint, {min: 10, max: 304, change: 1});
+            } catch (error) {/* Do nothing*/}
 
             await reporting.readMeteringMultiplierDivisor(endpoint);
             await reporting.currentSummDelivered(endpoint, {min: 10, max: 303, change: [1, 1]});
@@ -109,16 +140,10 @@ module.exports = [
                 await reporting.rmsVoltage(endpoint, {min: 10, max: 307, change: 5}); // divider 10: 0.5Vrms
             } catch (error) {/* Do nothing*/}
 
-            try {
-                await reporting.thermostatKeypadLockMode(endpoint);
-            } catch (error) {
-                // Not all support this: https://github.com/Koenkk/zigbee2mqtt/issues/3760
-            }
-
             // Disable default reporting
             await reporting.temperature(endpoint, {min: 1, max: 0xFFFF});
-            await endpoint.configureReporting('msTemperatureMeasurement', [{
-                attribute: 'tolerance', minimumReportInterval: 1, maximumReportInterval: 0xFFFF, reportableChange: 1}]);
+            await endpoint.configureReporting('msTemperatureMeasurement', [
+                {attribute: 'tolerance', minimumReportInterval: 1, maximumReportInterval: 0xFFFF, reportableChange: 1}]);
         },
     },
     {
@@ -126,21 +151,31 @@ module.exports = [
         model: 'TH1300ZB',
         vendor: 'Sinopé',
         description: 'Zigbee smart floor heating thermostat',
-        fromZigbee: [fz.legacy.sinope_thermostat_att_report, fz.legacy.hvac_user_interface, fz.electrical_measurement,
+        meta: {thermostat: {dontMapPIHeatingDemand: true}},
+        fromZigbee: [
+            fz.legacy.sinope_thermostat_att_report, fz.legacy.hvac_user_interface, fz.electrical_measurement,
             fz.ignore_temperature_report, fz.legacy.sinope_thermostat_state, fz.sinope_TH1300ZB_specific],
-        toZigbee: [tz.thermostat_local_temperature, tz.thermostat_occupied_heating_setpoint, tz.thermostat_unoccupied_heating_setpoint,
+        toZigbee: [
+            tz.thermostat_local_temperature, tz.thermostat_occupied_heating_setpoint, tz.thermostat_unoccupied_heating_setpoint,
             tz.thermostat_temperature_display_mode, tz.thermostat_keypad_lockout, tz.thermostat_system_mode, tz.thermostat_running_state,
             tz.sinope_thermostat_occupancy, tz.sinope_thermostat_backlight_autodim_param, tz.sinope_thermostat_time,
             tz.sinope_thermostat_enable_outdoor_temperature, tz.sinope_thermostat_outdoor_temperature, tz.sinope_floor_control_mode,
             tz.sinope_ambiant_max_heat_setpoint, tz.sinope_floor_min_heat_setpoint, tz.sinope_floor_max_heat_setpoint,
             tz.sinope_temperature_sensor, tz.sinope_time_format],
-        exposes: [e.local_temperature(), e.keypad_lockout(), e.power(), e.current(), e.voltage(),
-            exposes.climate().withSetpoint('occupied_heating_setpoint', 7, 30, 0.5).withLocalTemperature()
-                .withSystemMode(['off', 'auto', 'heat']).withRunningState(['idle', 'heat']).withPiHeatingDemand(),
-            exposes.enum('backlight_auto_dim', ea.SET, ['on demand', 'sensing']).withDescription('Control backlight dimming behavior')],
+        exposes: [
+            exposes.climate()
+                .withSetpoint('occupied_heating_setpoint', 7, 30, 0.5)
+                .withLocalTemperature()
+                .withSystemMode(['off', 'auto', 'heat'])
+                .withRunningState(['idle', 'heat'])
+                .withPiHeatingDemand(),
+            exposes.enum('backlight_auto_dim', ea.SET, ['on demand', 'sensing'])
+                .withDescription('Control backlight dimming behavior'),
+            e.keypad_lockout(), e.power(), e.current(), e.voltage()],
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
-            const binds = ['genBasic', 'genIdentify', 'genGroups', 'hvacThermostat', 'hvacUserInterfaceCfg',
+            const binds = [
+                'genBasic', 'genIdentify', 'genGroups', 'hvacThermostat', 'hvacUserInterfaceCfg',
                 'haElectricalMeasurement', 'msTemperatureMeasurement', 'manuSpecificSinope'];
             await reporting.bind(endpoint, coordinatorEndpoint, binds);
             await reporting.thermostatTemperature(endpoint);
@@ -152,7 +187,7 @@ module.exports = [
             } catch (error) {/* Not all support this */}
 
             try {
-                await endpoint.read('haElectricalMeasurement', ['acPowerMultiplier', 'acPowerDivisor']);
+                await endpoint.read('haElectricalMeasurement', ['acPowerMultiplier']);
                 await reporting.activePower(endpoint, {min: 10, max: 305, change: 1}); // divider 1: 1W
             } catch (error) {
                 endpoint.saveClusterAttributeKeyValue('haElectricalMeasurement', {'acPowerMultiplier': 1, 'acPowerDivisor': 1});
@@ -174,8 +209,8 @@ module.exports = [
 
             await endpoint.configureReporting('manuSpecificSinope', [{attribute: 'GFCiStatus', minimumReportInterval: 1,
                 maximumReportInterval: constants.repInterval.HOUR, reportableChange: 1}]);
-            await endpoint.configureReporting('manuSpecificSinope', [{attribute: 'floorLimitStatus',
-                minimumReportInterval: 1, maximumReportInterval: constants.repInterval.HOUR, reportableChange: 1}]);
+            await endpoint.configureReporting('manuSpecificSinope', [{attribute: 'floorLimitStatus', minimumReportInterval: 1,
+                maximumReportInterval: constants.repInterval.HOUR, reportableChange: 1}]);
             await reporting.temperature(endpoint, {min: 1, max: 0xFFFF}); // disable reporting
         },
     },
@@ -184,17 +219,28 @@ module.exports = [
         model: 'TH1400ZB',
         vendor: 'Sinopé',
         description: 'Zigbee low volt thermostat',
-        fromZigbee: [fz.legacy.sinope_thermostat_att_report, fz.legacy.sinope_thermostat_state],
-        toZigbee: [tz.thermostat_local_temperature, tz.thermostat_occupied_heating_setpoint, tz.thermostat_temperature_display_mode,
+        meta: {thermostat: {dontMapPIHeatingDemand: true}},
+        fromZigbee: [
+            fz.legacy.sinope_thermostat_att_report, fz.legacy.sinope_thermostat_state],
+        toZigbee: [
+            tz.thermostat_local_temperature, tz.thermostat_occupied_heating_setpoint, tz.thermostat_temperature_display_mode,
             tz.thermostat_keypad_lockout, tz.thermostat_system_mode, tz.thermostat_running_state,
             tz.sinope_thermostat_backlight_autodim_param, tz.sinope_thermostat_time, tz.sinope_thermostat_enable_outdoor_temperature,
             tz.sinope_thermostat_outdoor_temperature],
-        exposes: [exposes.climate().withSetpoint('occupied_heating_setpoint', 7, 30, 1).withLocalTemperature()
-            .withSystemMode(['off', 'auto', 'heat']).withRunningState(['idle', 'heat']).withPiHeatingDemand(), exposes.enum(
-            'backlight_auto_dim', ea.SET, ['on demand', 'sensing']).withDescription('Control backlight dimming behavior')],
+        exposes: [
+            exposes.climate()
+                .withSetpoint('occupied_heating_setpoint', 7, 30, 1)
+                .withLocalTemperature()
+                .withSystemMode(['off', 'auto', 'heat'])
+                .withRunningState(['idle', 'heat'])
+                .withPiHeatingDemand(),
+            exposes.enum('backlight_auto_dim', ea.SET, ['on demand', 'sensing'])
+                .withDescription('Control backlight dimming behavior')],
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
-            const binds = ['genBasic', 'genIdentify', 'genGroups', 'hvacThermostat', 'hvacUserInterfaceCfg', 'msTemperatureMeasurement'];
+            const binds = [
+                'genBasic', 'genIdentify', 'genGroups', 'hvacThermostat',
+                'hvacUserInterfaceCfg', 'msTemperatureMeasurement'];
             await reporting.bind(endpoint, coordinatorEndpoint, binds);
             await reporting.thermostatTemperature(endpoint);
             await reporting.thermostatOccupiedHeatingSetpoint(endpoint);
@@ -210,17 +256,27 @@ module.exports = [
         model: 'TH1500ZB',
         vendor: 'Sinopé',
         description: 'Zigbee dual pole line volt thermostat',
-        fromZigbee: [fz.legacy.thermostat_att_report],
-        toZigbee: [tz.thermostat_local_temperature, tz.thermostat_occupied_heating_setpoint, tz.thermostat_unoccupied_heating_setpoint,
+        fromZigbee: [
+            fz.legacy.thermostat_att_report],
+        toZigbee: [
+            tz.thermostat_local_temperature, tz.thermostat_occupied_heating_setpoint, tz.thermostat_unoccupied_heating_setpoint,
             tz.thermostat_temperature_display_mode, tz.thermostat_keypad_lockout, tz.thermostat_system_mode, tz.thermostat_running_state,
             tz.sinope_thermostat_occupancy, tz.sinope_thermostat_backlight_autodim_param, tz.sinope_thermostat_time,
             tz.sinope_thermostat_enable_outdoor_temperature, tz.sinope_thermostat_outdoor_temperature],
-        exposes: [exposes.climate().withSetpoint('occupied_heating_setpoint', 7, 30, 1).withLocalTemperature()
-            .withSystemMode(['off', 'auto', 'heat']).withRunningState(['idle', 'heat']).withPiHeatingDemand(), exposes.enum(
-            'backlight_auto_dim', ea.SET, ['on demand', 'sensing']).withDescription('Control backlight dimming behavior')],
+        exposes: [
+            exposes.climate()
+                .withSetpoint('occupied_heating_setpoint', 7, 30, 1)
+                .withLocalTemperature()
+                .withSystemMode(['off', 'auto', 'heat'])
+                .withRunningState(['idle', 'heat'])
+                .withPiHeatingDemand(),
+            exposes.enum('backlight_auto_dim', ea.SET, ['on demand', 'sensing'])
+                .withDescription('Control backlight dimming behavior')],
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
-            const binds = ['genBasic', 'genIdentify', 'genGroups', 'hvacThermostat', 'hvacUserInterfaceCfg', 'msTemperatureMeasurement'];
+            const binds = [
+                'genBasic', 'genIdentify', 'genGroups',
+                'hvacThermostat', 'hvacUserInterfaceCfg', 'msTemperatureMeasurement'];
             await reporting.bind(endpoint, coordinatorEndpoint, binds);
             await reporting.thermostatTemperature(endpoint);
             await reporting.thermostatOccupiedHeatingSetpoint(endpoint);
@@ -236,11 +292,62 @@ module.exports = [
         model: 'SW2500ZB',
         vendor: 'Sinopé',
         description: 'Zigbee smart light switch',
-        extend: extend.switch(),
+        exposes: [e.switch(),
+            exposes.numeric('led_intensity_on', ea.SET).withValueMin(0).withValueMax(100)
+                .withDescription('Control status LED intensity when load ON'),
+            exposes.numeric('led_intensity_off', ea.SET).withValueMin(0).withValueMax(100)
+                .withDescription('Control status LED intensity when load OFF'),
+            exposes.composite('led_color_on', 'led_color_on')
+                .withFeature(exposes.numeric('r', ea.ALL))
+                .withFeature(exposes.numeric('g', ea.ALL))
+                .withFeature(exposes.numeric('b', ea.ALL))
+                .withDescription('Control status LED color when load ON'),
+            exposes.composite('led_color_off', 'led_color_off')
+                .withFeature(exposes.numeric('r', ea.ALL))
+                .withFeature(exposes.numeric('g', ea.ALL))
+                .withFeature(exposes.numeric('b', ea.ALL))
+                .withDescription('Control status LED color when load OFF'),
+        ],
+        fromZigbee: [fz.on_off, fz.electrical_measurement],
+        toZigbee: [tz.on_off, tz.sinope_led_intensity_on, tz.sinope_led_intensity_off, tz.sinope_led_color_on, tz.sinope_led_color_off],
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff']);
             await reporting.onOff(endpoint);
+        },
+    },
+    {
+        zigbeeModel: ['DM2500ZB'],
+        model: 'DM2500ZB',
+        vendor: 'Sinopé',
+        description: 'Zigbee smart dimmer',
+        exposes: [e.light_brightness(),
+            exposes.numeric('led_intensity_on', ea.SET).withValueMin(0).withValueMax(100)
+                .withDescription('Control status LED when load ON'),
+            exposes.numeric('led_intensity_off', ea.SET).withValueMin(0).withValueMax(100)
+                .withDescription('Control status LED when load OFF'),
+            exposes.numeric('minimum_brightness', ea.SET).withValueMin(0).withValueMax(3000)
+                .withDescription('Control minimum dimmer brightness'),
+            exposes.composite('led_color_on', 'led_color_on')
+                .withFeature(exposes.numeric('r', ea.ALL))
+                .withFeature(exposes.numeric('g', ea.ALL))
+                .withFeature(exposes.numeric('b', ea.ALL))
+                .withDescription('Control status LED color when load ON'),
+            exposes.composite('led_color_off', 'led_color_off')
+                .withFeature(exposes.numeric('r', ea.ALL))
+                .withFeature(exposes.numeric('g', ea.ALL))
+                .withFeature(exposes.numeric('b', ea.ALL))
+                .withDescription('Control status LED color when load OFF'),
+        ],
+        fromZigbee: [fz.on_off, fz.brightness, fz.electrical_measurement],
+        toZigbee: [tz.light_onoff_brightness, tz.sinope_led_intensity_on, tz.sinope_led_intensity_off,
+            tz.sinope_minimum_brightness, tz.sinope_led_color_on, tz.sinope_led_color_off],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            await extend.light_onoff_brightness().configure(device, coordinatorEndpoint, logger);
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff', 'genLevelCtrl']);
+            await reporting.onOff(endpoint);
+            await reporting.brightness(endpoint);
         },
     },
     {
@@ -260,23 +367,19 @@ module.exports = [
         },
     },
     {
-        zigbeeModel: ['DM2500ZB'],
-        model: 'DM2500ZB',
+        zigbeeModel: ['SP2610ZB'],
+        model: 'SP2610ZB',
         vendor: 'Sinopé',
-        description: 'Zigbee smart dimmer',
-        extend: extend.light_onoff_brightness({noConfigure: true}),
-        exposes: [e.light_brightness(), e.effect(), exposes.numeric('led_intensity_on', ea.SET).withValueMin(0).withValueMax(100)
-            .withDescription('Control status LED when load ON'), exposes.numeric('led_intensity_off', ea.SET).withValueMin(0)
-            .withValueMax(100).withDescription('Control status LED when load OFF'), exposes.numeric('minimum_brightness', ea.SET)
-            .withValueMin(0).withValueMax(3000).withDescription('Control minimum dimmer brightness')],
-        toZigbee: [tz.light_onoff_brightness, tz.effect, tz.sinope_led_intensity_on, tz.sinope_led_intensity_off,
-            tz.sinope_minimum_brightness],
+        description: 'Zigbee smart outlet',
+        fromZigbee: [fz.on_off, fz.electrical_measurement],
+        toZigbee: [tz.on_off],
+        exposes: [e.switch(), e.power()],
         configure: async (device, coordinatorEndpoint, logger) => {
-            await extend.light_onoff_brightness().configure(device, coordinatorEndpoint, logger);
             const endpoint = device.getEndpoint(1);
-            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff', 'genLevelCtrl']);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff', 'haElectricalMeasurement']);
+            await reporting.readEletricalMeasurementMultiplierDivisors(endpoint);
             await reporting.onOff(endpoint);
-            await reporting.brightness(endpoint);
+            await reporting.activePower(endpoint, {min: 10, change: 1});
         },
     },
     {

@@ -34,7 +34,7 @@ module.exports = [
         },
     },
     {
-        zigbeeModel: ['ZLL-ExtendedColo', 'ZLL-ExtendedColor', 'AD-RGBW3001'],
+        zigbeeModel: ['ZLL-ExtendedColo', 'ZLL-ExtendedColor'],
         model: '81809/81813',
         vendor: 'AduroSmart',
         description: 'ERIA colors and white shades smart light bulb A19/BR30',
@@ -45,11 +45,26 @@ module.exports = [
         },
     },
     {
+        zigbeeModel: ['AD-RGBW3001'],
+        model: '81809FBA',
+        vendor: 'AduroSmart',
+        description: 'ERIA colors and white shades smart light bulb A19/BR30',
+        extend: extend.light_onoff_brightness_colortemp_color({supportsHS: true, colorTempRange: [153, 500]}),
+        meta: {applyRedFix: true},
+    },
+    {
         zigbeeModel: ['AD-E14RGBW3001'],
         model: '81895',
         vendor: 'AduroSmart',
         description: 'ERIA E14 Candle Color',
         extend: extend.light_onoff_brightness_colortemp_color({colorTempRange: [153, 500]}),
+    },
+    {
+        zigbeeModel: ['AD-DimmableLight3001'],
+        model: '81810',
+        vendor: 'AduroSmart',
+        description: 'Zigbee Aduro Eria B22 bulb - warm white',
+        extend: extend.light_onoff_brightness(),
     },
     {
         zigbeeModel: ['Adurolight_NCC'],

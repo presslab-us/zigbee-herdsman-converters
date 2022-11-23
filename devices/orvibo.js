@@ -5,7 +5,47 @@ const reporting = require('../lib/reporting');
 const extend = require('../lib/extend');
 const e = exposes.presets;
 
+const tzLocal = {
+    DD10Z_brightness: {
+        key: ['brightness'],
+        options: [exposes.options.transition()],
+        convertSet: async (entity, key, value, meta) => {
+            // Device doesn't support moveToLevelWithOnOff therefore this converter is needed.
+            await entity.command('genLevelCtrl', 'moveToLevel', {level: Number(value), transtime: 0}, {disableDefaultResponse: true});
+            return {state: {brightness: value}};
+        },
+        convertGet: async (entity, key, meta) => {
+            await entity.read('genLevelCtrl', ['currentLevel']);
+        },
+    },
+};
+
 module.exports = [
+    {
+        zigbeeModel: ['ccb9f56837ab41dcad366fb1452096b6'],
+        model: 'DD10Z',
+        vendor: 'ORVIBO',
+        description: 'Smart spotlight',
+        // https://github.com/Koenkk/zigbee2mqtt/issues/13123#issuecomment-1198793749
+        meta: {disableDefaultResponse: true},
+        toZigbee: [tz.on_off, tzLocal.DD10Z_brightness, tz.light_colortemp, tz.effect],
+        extend: extend.light_onoff_brightness_colortemp(
+            {colorTempRange: [153, 370], disableColorTempStartup: true, disablePowerOnBehavior: true}),
+    },
+    {
+        zigbeeModel: ['4a33f5ea766a4c96a962b371ffde9943'],
+        model: 'DS20Z07B',
+        vendor: 'ORVIBO',
+        description: 'Downlight (S series)',
+        extend: extend.light_onoff_brightness_colortemp({colorTempRange: [166, 370]}),
+    },
+    {
+        zigbeeModel: ['ORVIBO Socket', '93e29b89b2ee45bea5bdbb7679d75d24'],
+        model: 'OR-ZB-S010-3C',
+        vendor: 'ORVIBO',
+        description: 'Smart socket',
+        extend: extend.switch(),
+    },
     {
         zigbeeModel: ['3c4e4fc81ed442efaf69353effcdfc5f', '51725b7bcba945c8a595b325127461e9'],
         model: 'CR11S8UZ',
@@ -289,6 +329,8 @@ module.exports = [
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg', 'closuresWindowCovering']);
             await reporting.batteryPercentageRemaining(endpoint);
             await reporting.currentPositionLiftPercentage(endpoint);
+            device.powerSource = 'Battery';
+            device.save();
         },
         exposes: [e.cover_position(), e.battery()],
     },
