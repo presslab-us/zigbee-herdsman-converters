@@ -10,3 +10,11 @@ tmp
 # Eclipse project files
 .project
 .settings/
+/index.*
+/converters/
+/devices/
+/lib/
+tsconfig.tsbuildinfo
+coverage/
+.jest-tmp/
+dist/
